@@ -1,18 +1,112 @@
 # Strata N1X — DeepSeek-V4.1-Flash-1017 on Windows ARM64
 
+[English](#english) · [中文说明与下载](#中文说明与下载)
+
+## English
+
+**Turn an N1X 128GB laptop into a local DeepSeek workspace: native CUDA inference, desktop model management and DeepSeek Harness integration.**
+
+[Project website](https://zackyangzeqi-spec.github.io/strata-n1x-Zackyzq/) · [Download & install](#download-and-install) · [DeepSeek Harness setup](docs/DSH.md) · [Recorded performance](docs/BENCHMARKS.md) · [FAQ](docs/FAQ.md) · [AI-assisted setup](docs/AI-ASSISTED.md)
+
+**Strata N1X** is a free community adaptation of [Strata](https://github.com/Niko1221/Strata), maintained by **[Zack_yzq](https://github.com/zackyangzeqi-spec)** for **NVIDIA RTX Spark N1X laptops with 128GB of shared CPU/GPU memory and Windows ARM64**. It brings local model loading, unloading, monitoring and a local API into one desktop workflow.
+
+The project runs third-party quantizations of **[DeepSeek-V4.1-Flash-1017](https://api-docs.deepseek.com/updates/)**, DeepSeek's October 17, 2026 update, using the [ISTA-DASLab GSQ-RCO GGUF](https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF) route. The maintainer recorded actual **1.75 / 2.25bpw model responses** on one Microsoft N1X 128GB laptop, plus **two basic DeepSeek Harness (DSH) chat rounds and prompt-cache reuse**. The recorded native inference route requires neither LM Studio nor a WSL inference bridge.
+
+> **Experimental Preview.** Results come from one maintainer-owned device. Other N1X laptops, ordinary Windows x64 PCs, Macs and DGX Spark systems are not validated by these results. **128GB is the shared CPU/GPU total**, not separate 128GB pools. See [project facts](docs/PROJECT-FACTS.md) and [FAQ](docs/FAQ.md).
+
+### Download and install
+
+| What you need | Link |
+|---|---|
+| **Windows ARM64 installer** | **[Download strata_Zackyzq_0.2.8_arm64-setup.exe](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/releases/download/v0.2.8-n1x.1/strata_Zackyzq_0.2.8_arm64-setup.exe)** |
+| Release notes, SHA256 checksums and source preview | [Release v0.2.8-n1x.1](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/releases/tag/v0.2.8-n1x.1) |
+| Requirements, installation and model preparation | [Installation guide](docs/INSTALL.md) |
+| Connect DeepSeek Harness | [DSH setup guide](docs/DSH.md) |
+
+The English and Chinese sections link to **the same installer**, not separate language builds. It is currently unsigned and includes neither model weights nor NVIDIA drivers. Prepare compatible model files and drivers yourself. Using the installer does not require a source build; an independent clean source build is not yet verified.
+
+### What it provides
+
+| Use case | Included capability |
+|---|---|
+| Run DeepSeek 1017 on N1X Windows | A native Windows ARM64 CUDA **inference engine**; the control layer still includes emulated x64 Python |
+| Chat with a local model | Desktop loading, unloading and runtime monitoring |
+| Use DeepSeek Harness as the client | A local OpenAI-compatible API; DSH manages its conversations and tools |
+| Understand speed and waiting time | Existing request, cache and storage observations; decoding speed is distinguished from total response time |
+| Get setup help or study the adaptation | [AI-assisted prompts](docs/AI-ASSISTED.md), [development notes](docs/DEVELOPMENT-NOTES.md) and [build boundaries](docs/BUILD.md) |
+
+### How the components connect
+
+```mermaid
+flowchart TB
+    D["DeepSeek Harness: conversations and tools"] --> H["Strata local OpenAI-compatible API"]
+    U["Strata desktop: chat and model management"] --> H
+    H --> E["Windows ARM64 CUDA inference engine"]
+    E <--> C["GPU / system RAM: runtime state and expert caches"]
+    E <--> S["Local SSD: quantized weights and companion files"]
+    N["NVIDIA settings: GPU / RAM allocation"] -.-> C
+    classDef client fill:#e6f4ff,stroke:#1677ff,color:#102a43
+    classDef runtime fill:#e8f7ee,stroke:#2e8b57,color:#173b28
+    classDef storage fill:#fff4db,stroke:#c68c17,color:#604411
+    class D,U client
+    class H,E runtime
+    class C,S,N storage
+```
+
+**Strata serves local inference; DSH connects to it.** GPU/RAM allocation is an NVIDIA hardware/driver capability. This project adapts inference, desktop integration and runtime configuration to that environment. Model inference runs locally; network use by DSH search, plugins and remote tools depends on their own configuration.
+
+![DeepSeek 2.25bpw desktop monitoring on N1X](docs/images/n1x-deepseek225-monitor.png)
+
+### Recorded performance — conditions matter
+
+| Record | Published observation | Interpretation |
+|---|---|---|
+| **2.25bpw desktop screenshot** | UI summary: **13 requests, average output 13.3 tokens/s** | Session statistics reported by the UI; 12 request rows are visible and the average was not independently recalculated |
+| One visible 2.25bpw request | **16.1 tokens/s, 1,108 output tokens** | 51,824 prompt tokens, 49,504 reused; about 90 seconds for the whole turn |
+| Largest visible 2.25bpw prompt | **56,532 tokens, including 56,317 reused** | Evidence for that request and cache reuse; a configured 1024K limit is not a full 1M-input validation |
+| Historical 1.75bpw short reply | **113 tokens at 20.0 tokens/s** | A separate cached short reply, not sustained 2.25bpw performance |
+
+These observations use different quantizations and cache conditions. The full records retain slower and comparison results of **1.7, 7.2, 9.2 and 9.3 tokens/s**; selected figures are not a guaranteed speed range. The first engine token may contain reasoning rather than visible answer text. See [the complete methodology, screenshots and data](docs/BENCHMARKS.md).
+
+### DeepSeek Harness integration
+
+The documented example uses `http://127.0.0.1:47831/v1` and model ID `deepseek-v4.1-flash-ist-das-2.25bpw`. Use the actual values shown by your local Strata instance. Load the model in Strata, then select the corresponding provider and model in DSH.
+
+The historical evidence covers **two basic chat rounds and cache reuse**. The development machine used a local HTTP timeout extension that is **not included in the release**. The exact tested DSH version and the extension's necessity on other versions are not fully recorded. This does not validate every DSH tool, memory feature, WeChat integration or long-running agent task. Keep the prerequisites in the [DSH guide](docs/DSH.md).
+
+[View the NVIDIA allocation, Strata and DSH demonstration screenshot](docs/images/n1x-nvidia-strata-dsh.png). The maintainer authorized its publication; model-generated capability statements in the image are not independent tool-validation evidence.
+
+### Documentation, credits and support
+
+- [Project facts](docs/PROJECT-FACTS.md): model identity, platform, versions, verified scope and evidence.
+- [Development notes](docs/DEVELOPMENT-NOTES.md): implementation evidence, reasoning and remaining unknowns.
+- [Build guide](docs/BUILD.md): adaptation patches against upstream commit `870aedd9e1ebe1c91f94da93b59af17729f6c5c0`; a complete clean build is not independently verified.
+- [Release checklist](docs/RELEASE-CHECKLIST.md): clean-account installs, other devices, full 1M input and long-task stability remain incompletely validated.
+- [Publishing guide](docs/PUBLISHING.md): maintaining the website and public discovery links.
+
+Based on **[Niko1221/Strata](https://github.com/Niko1221/Strata)**, preserving Strata, Project Maya, ggml and dependency attribution and licenses. Maintained by **[Zack_yzq](https://github.com/zackyangzeqi-spec)**; the application display name is **strata_Zackyzq**. This is a free community project, not an official Microsoft, NVIDIA, DeepSeek or Strata release. Adaptation code follows [LICENSE](LICENSE); runtime components and images retain their [asset and third-party terms](docs/ASSETS.md).
+
+If this helps you, you can star the repository, [follow the maintainer](https://github.com/zackyangzeqi-spec), or share sanitized feedback in [Issues](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/issues). [Voluntary WeChat / Alipay support](sponsorship/README.md) is optional: it is not required to use the project or report problems, and does not purchase support, priority responses or delivery commitments.
+
+No model weights, credentials, private runtime profiles or raw development chats are distributed. Existing project/payment images and three demonstration screenshots retain the maintainer's publication authorization. Other private logs and conversations are excluded. This community preview carries no general compatibility or performance guarantee.
+
+[中文说明与下载 ↓](#中文说明与下载)
+
+---
+
+## 中文说明与下载
+
 **让 N1X 128GB 笔记本成为本地 DeepSeek 工作台：原生 CUDA 推理、桌面模型管理、DeepSeek Harness 接入。**
 
-[项目说明页](https://zackyangzeqi-spec.github.io/strata-n1x-Zackyzq/) · [下载安装包](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/releases/tag/v0.2.8-n1x.1) · [安装指南](docs/INSTALL.md) · [接入 DeepSeek Harness](docs/DSH.md) · [已有实测](docs/BENCHMARKS.md) · [常见问题](docs/FAQ.md) · [让 AI 协助](docs/AI-ASSISTED.md)
+[项目说明页](https://zackyangzeqi-spec.github.io/strata-n1x-Zackyzq/) · [下载与安装](#下载与安装) · [安装指南](docs/INSTALL.md) · [接入 DeepSeek Harness](docs/DSH.md) · [已有实测](docs/BENCHMARKS.md) · [常见问题](docs/FAQ.md) · [让 AI 协助](docs/AI-ASSISTED.md)
 
 **Strata N1X** 是由 **[Zack_yzq](https://github.com/zackyangzeqi-spec)** 维护、基于 [Strata](https://github.com/Niko1221/Strata) 的免费社区适配，面向 **NVIDIA RTX Spark N1X、128GB CPU/GPU 统一内存、Windows ARM64 笔记本**。它把本地模型加载、卸载、运行监控和本机 API 接入整理到一个桌面工作流中。
 
 本项目运行的是 **DeepSeek 官方于 2026 年 10 月 17 日更新的 [DeepSeek-V4.1-Flash-1017](https://api-docs.deepseek.com/zh-cn/updates/)** 的第三方量化版本，采用 [ISTA-DASLab GSQ-RCO GGUF](https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF) 路线。维护者已在自己的微软 N1X 128GB 笔记本上取得 **1.75 / 2.25bpw 实际模型回复**，并记录了 **DeepSeek Harness（DSH）两轮基础聊天与提示词缓存复用**。
 
-**English:** Run quantized **DeepSeek-V4.1-Flash-1017 locally on NVIDIA RTX Spark N1X 128GB laptops**, using a **native Windows ARM64 CUDA inference engine**, Strata desktop controls and a local **OpenAI-compatible API for DeepSeek Harness**. This community preview includes an installer, setup guides and maintainer observations. The recorded native inference route requires neither LM Studio nor a WSL inference bridge. See [project facts](docs/PROJECT-FACTS.md) for the tested scope.
-
 ![N1X 上 DeepSeek 2.25bpw 的桌面运行监控](docs/images/n1x-deepseek225-monitor.png)
 
-## 先看是否适合你
+### 先看是否适合你
 
 | 你关心的事 | 本项目提供什么 |
 |---|---|
@@ -24,7 +118,18 @@
 
 **当前状态：Experimental Preview / 社区实验性预览。** 已记录的是维护者单台微软 N1X 设备的结果；普通 Windows x64、Mac、DGX Spark 和其他 N1X 机型不能仅凭“128GB 内存”视作兼容。128GB 是 CPU/GPU 共享总容量。更多条件见 [FAQ](docs/FAQ.md)。
 
-## 从哪里开始
+### 下载与安装
+
+| 需要什么 | 点击入口 |
+|---|---|
+| **Windows ARM64 安装包** | **[下载安装包 strata_Zackyzq_0.2.8_arm64-setup.exe](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/releases/download/v0.2.8-n1x.1/strata_Zackyzq_0.2.8_arm64-setup.exe)** |
+| 版本说明、SHA256 校验文件与源码预览包 | [打开 v0.2.8-n1x.1 发布页](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/releases/tag/v0.2.8-n1x.1) |
+| 环境要求、安装步骤与模型准备 | [安装使用指南](docs/INSTALL.md) |
+| 连接 DeepSeek Harness | [DSH 接入指南](docs/DSH.md) |
+
+**这里是中文说明区，与上方英文区下载的是同一个安装包，并非两个语言版本。** 当前安装器未签名，不包含模型权重与 NVIDIA 驱动；请先按指南核对设备和文件。
+
+### 从哪里开始
 
 | 你的目标 | 阅读入口 | 得到什么 |
 |---|---|---|
@@ -36,7 +141,7 @@
 
 使用安装包无需先执行源码构建流程。下载 `strata_Zackyzq_0.2.8_arm64-setup.exe` 后按安装指南使用；需要自行准备兼容的模型文件与驱动。项目公开的是固定上游基线的适配补丁和配套材料，完整干净源码构建尚未获得独立验证。
 
-## 它们怎样连接
+### 它们怎样连接
 
 ```mermaid
 flowchart TB
@@ -56,7 +161,7 @@ flowchart TB
 
 在这条已记录的路线中，**Strata 提供本地推理服务，DSH 连接该服务**。GPU/RAM 分配属于 NVIDIA 的硬件与驱动能力；本项目负责对应的推理、桌面与运行配置适配。模型推理在本机完成，DSH 的搜索、插件、远程工具是否联网取决于各自配置。
 
-## 已有表现：把条件和数字一起看
+### 已有表现：把条件和数字一起看
 
 | 记录 | 已公开观察 | 如何理解 |
 |---|---|---|
@@ -67,7 +172,7 @@ flowchart TB
 
 上述均为已有观察，包含不同量化与缓存条件。完整表保留 **1.7、7.2、9.2、9.3 tokens/s** 等较慢或对照结果；不把精选数字当成所有请求的速度范围。首个引擎 token 还可能是推理内容，不能直接当成第一段正文出现的时间。查看 [完整口径、截图和数据](docs/BENCHMARKS.md)。
 
-## DeepSeek Harness 接入到哪一步
+### DeepSeek Harness 接入到哪一步
 
 默认示例为 `http://127.0.0.1:47831/v1`，本地模型 ID 为 `deepseek-v4.1-flash-ist-das-2.25bpw`；实际值以本机 Strata 为准。先在 Strata 加载模型，再在 DSH 选择相应提供方及模型。
 
@@ -77,7 +182,7 @@ flowchart TB
 
 此图由维护者明确授权公开，用于展示界面关系；图内模型生成的能力描述不构成对所有工具能力的独立证明。
 
-## 项目资料、来源与支持
+### 项目资料、来源与支持
 
 - [项目说明页维护](docs/PUBLISHING.md)：网页发布、分享图与搜索入口的维护方法。
 - [项目事实表](docs/PROJECT-FACTS.md)：模型身份、平台、版本、已验证范围与证据入口。
@@ -89,4 +194,6 @@ flowchart TB
 
 如果项目帮助你解决了 N1X 本地部署问题，欢迎 Star 收藏，也欢迎[关注 Zack_yzq 的后续项目](https://github.com/zackyangzeqi-spec)、分享具体使用体验，或在 [Issues](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/issues) 留下脱敏反馈。[微信／支付宝自愿支持](sponsorship/README.md) 不作为使用或反馈的前提，也不购买支持、优先回复或交付承诺。
 
-No model weights, credentials, private runtime profiles or raw development chats are distributed. The existing project/payment images and three demonstration screenshots retain the maintainer's publication authorization. Other private logs and conversations are excluded. This is a community preview, with no general compatibility or performance guarantee.
+不分发模型权重、凭据、私人运行配置或原始开发聊天。现有项目／收款图片及三张演示截图保留维护者的公开授权；其他私人日志和对话不在发布范围内。本项目为社区预览，不承诺普遍兼容性或性能保证。
+
+[Back to English ↑](#english)
