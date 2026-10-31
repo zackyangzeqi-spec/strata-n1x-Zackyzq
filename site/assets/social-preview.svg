@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Strata N1X by Zack_yzq</title>
+  <desc id="desc">DeepSeek-V4.1-Flash-1017 community deployment for NVIDIA RTX Spark N1X 128GB laptops. Windows ARM64 CUDA engine and DeepSeek Harness.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#102439"/><stop offset="1" stop-color="#08141e"/></linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#6befbc"/><stop offset="1" stop-color="#82d7ed"/></linearGradient>
+    <pattern id="grid" width="56" height="56" patternUnits="userSpaceOnUse"><path d="M56 0H0V56" fill="none" stroke="#b0d4e1" stroke-opacity=".06"/></pattern>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <path d="M1010 150l180 88-180 88-180-88z M1010 242l180 88-180 88-180-88 M1010 334l180 88-180 88-180-88" stroke="url(#accent)" stroke-width="3" fill="none" opacity=".46"/>
+  <rect x="64" y="63" width="8" height="28" rx="4" fill="#6befbc"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="88" y="85" fill="#b6cbd6" font-size="22" letter-spacing="3">LOCAL AI · COMMUNITY PREVIEW</text>
+    <text x="64" y="225" fill="#f6fbff" font-size="100" font-weight="700" letter-spacing="-5">Strata <tspan fill="#6befbc">N1X</tspan></text>
+    <text x="68" y="297" fill="#edf6fb" font-size="35" font-weight="600">DeepSeek-V4.1-Flash-1017</text>
+    <text x="68" y="350" fill="#b6cbd6" font-size="27">Windows ARM64 CUDA engine</text>
+    <text x="68" y="393" fill="#b6cbd6" font-size="27">Local API for DeepSeek Harness</text>
+    <rect x="68" y="437" width="281" height="48" rx="24" fill="#173d3b"/>
+    <text x="92" y="468" fill="#a9f5d2" font-size="21">N1X 128GB · 2.25bpw</text>
+    <path d="M68 529H1212" stroke="#29414f"/>
+    <text x="68" y="579" fill="#f4f8fb" font-size="23" font-weight="600">by Zack_yzq</text>
+    <text x="1212" y="579" fill="#a8bdc8" font-size="22" text-anchor="end">github.com/zackyangzeqi-spec/strata-n1x-Zackyzq</text>
+  </g>
+</svg>
