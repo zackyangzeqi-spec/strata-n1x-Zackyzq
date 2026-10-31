@@ -1,0 +1,14 @@
+[
+  {
+    "id": "zh-summary",
+    "prompt": "请用不超过150字中文解释数据仓库中事实表和维度表的区别，并各举一个零售业务例子。"
+  },
+  {
+    "id": "sql-monthly",
+    "prompt": "表 orders(customer_id, amount, created_at)。写SQL统计2026年10月每位客户总金额，按金额降序、customer_id升序取前3名。必须使用半开时间区间并加中文注释。"
+  },
+  {
+    "id": "python-dedupe",
+    "prompt": "写一个Python函数，保留整数列表中首次出现的顺序并去重。解释时间和空间复杂度，并给出含重复、空列表和负数的assert测试。"
+  }
+]

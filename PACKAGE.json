@@ -39,14 +39,34 @@
       "bytes": 651
     },
     {
+      "path": "benchmarks/observations.csv",
+      "sha256": "5aee5668cdf2219e6e7c831523c79a6eeace4dd6cf593c15c0d733659881e463",
+      "bytes": 1333
+    },
+    {
+      "path": "benchmarks/observations.json",
+      "sha256": "06112d38a85a803fcf0baeddae0d70034dff9c86323c749bf470ef406c1df19c",
+      "bytes": 5861
+    },
+    {
+      "path": "benchmarks/prompts.json",
+      "sha256": "9cc40e30911e3a08a4cb80f7cdfa4b22fae8ce774c2f541d46781cc18275feda",
+      "bytes": 635
+    },
+    {
+      "path": "benchmarks/README.md",
+      "sha256": "ecb5d65b26fdd879e6f3f3f0ed8e71670f6499845b3dea2a8afcce0abadf7b3f",
+      "bytes": 1801
+    },
+    {
       "path": "docs/ASSETS.md",
-      "sha256": "93da58c22515218e6443f6a02480fe00713282fdae110d3fef77082b3fb72014",
-      "bytes": 867
+      "sha256": "c229c5c7fcbd66b19cc85c739dc806ce7a428450269042e7b08377f3072fb038",
+      "bytes": 1382
     },
     {
       "path": "docs/BENCHMARKS.md",
-      "sha256": "3bf5d13e5bedaa772aa5637bb5bf897a18f64f73b3873c5d84b63f45c8d8e534",
-      "bytes": 819
+      "sha256": "7f826e5f40f6a53b14ee261701d08b895ac47f7cd38471403a2a03d08e28d2af",
+      "bytes": 4668
     },
     {
       "path": "docs/BUILD.md",
@@ -55,8 +75,28 @@
     },
     {
       "path": "docs/DSH.md",
-      "sha256": "1ffe3e4649acd12d9854e5b7f80fdffd15915f262978f819c54e81db5b2f18cf",
-      "bytes": 1875
+      "sha256": "0b77ccd95c658d4e89898bb51264531d781bc84d0fcc747eaafb4cc7c127d0a2",
+      "bytes": 2231
+    },
+    {
+      "path": "docs/FAQ.md",
+      "sha256": "f63d395f53bfd137a5c63bf6385d1d65d6f662bf4a968d58472daa15605bb78a",
+      "bytes": 2994
+    },
+    {
+      "path": "docs/images/n1x-deepseek225-monitor.png",
+      "sha256": "9384a78aa93d0257e4bd4ae55da6133179b7c470bc3803652e9a6b19fe790f89",
+      "bytes": 227192
+    },
+    {
+      "path": "docs/images/n1x-deepseek225-requests.png",
+      "sha256": "dd922713a74eeca8ad68cf7f1e5356fbe84959b9b5040a7172cb93b760cc9c24",
+      "bytes": 211885
+    },
+    {
+      "path": "docs/images/n1x-nvidia-strata-dsh.png",
+      "sha256": "d8989364d9b40f67367a7a3b33f111e772f8c5e14a5655526abe429212d8d1e7",
+      "bytes": 506013
     },
     {
       "path": "docs/INSTALL.md",
@@ -100,8 +140,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "af3160544fa49d293e2e6f5d3c25f8a34f6970557b7058f5e958abf09d1aa852",
-      "bytes": 4674
+      "sha256": "43514ba5335ef6f67fb7885214ec3f85706a5c562035a40b120eecb489af203c",
+      "bytes": 6579
     },
     {
       "path": "sponsorship/alipay.jpg",
@@ -124,7 +164,7 @@
       "bytes": 1164
     }
   ],
-  "privacy_scan": "Known private markers absent; five explicitly authorized image files verified by SHA256; installer reviewed separately.",
+  "privacy_scan": "Known private markers absent from text. Five previously authorized project/payment images plus three explicitly authorized unredacted demonstration screenshots are hash-pinned exceptions. No private runtime profiles, credentials or model weights included.",
   "authorized_payment_images": {
     "sponsorship/alipay.jpg": "87a33391ae48661874c9769bfad77d97a560ef2386b90e09058253d99848bf16",
     "sponsorship/wechat.png": "fd5e05851dcc3180fb8ce3d4dd0d6ddff1005aad93b8ace43a70a5ce3d0df999",
@@ -133,5 +173,10 @@
     "apps/desktop/src-tauri/icons/icon.ico": "242ad453cca303110f8e400eb78f26db6d625631519951351590a72e8eb2e974"
   },
   "patch_check": "passed against pinned HEAD",
-  "repository": "https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq"
+  "repository": "https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq",
+  "authorized_demonstration_screenshots": {
+    "docs/images/n1x-deepseek225-monitor.png": "9384a78aa93d0257e4bd4ae55da6133179b7c470bc3803652e9a6b19fe790f89",
+    "docs/images/n1x-deepseek225-requests.png": "dd922713a74eeca8ad68cf7f1e5356fbe84959b9b5040a7172cb93b760cc9c24",
+    "docs/images/n1x-nvidia-strata-dsh.png": "d8989364d9b40f67367a7a3b33f111e772f8c5e14a5655526abe429212d8d1e7"
+  }
 }

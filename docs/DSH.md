@@ -1,19 +1,29 @@
-# DSH使用Strata本机接口
+# DeepSeek Harness local setup / DSH 本地接入
 
-先在Strata桌面加载模型并等待就绪，再在DSH新增OpenAI兼容提供商。模型生命周期由Strata管理，DSH只发送请求。
+```text
+DeepSeek Harness (chat, tools, memory)
+    -> http://127.0.0.1:47831/v1 (OpenAI-compatible API)
+    -> Strata_Zackyzq desktop-managed native Windows ARM64 CUDA engine
+    -> local DeepSeek 1017 weights
+```
 
-- Base URL：`http://127.0.0.1:47831/v1`
-- Model ID：`deepseek-v4.1-flash-ist-das-2.25bpw`
-- 若客户端必填key，填写本机占位值；不要公开真实凭据。
-- 上下文1048576、输出预算131072、请求/流空闲等待3600000ms、单路。大值并不代表实测容量。
-- 本端口是桌面host默认端口；被占用时可能改端口，须核实际地址。不要使用内部动态引擎端口或把接口暴露到公网。
+## Connect / 设置
 
-已有DSH聊天不自动换模型。记忆整理/嵌入模型是不同配置，不能把聊天接通当成所有服务已迁移。不要把整份个人DSH配置上传到仓库。
+1. Start Strata_Zackyzq, select the local DeepSeek 1017 model and load it. Wait until ready. 首先确认桌面本身能收到回复。
+2. In DSH's custom OpenAI-compatible provider, use base URL `http://127.0.0.1:47831/v1`. Choose the actual ID returned by `/v1/models`; the tested 2.25 ID is `deepseek-v4.1-flash-ist-das-2.25bpw`.
+3. The tested loopback setup has no cloud API key. If the client requires a nonempty placeholder, it is not an access credential. Do not enter or publish real cloud keys for this local endpoint.
+4. Send a short message, then a follow-up in the same conversation. Verify the request and token reuse in Strata monitoring. Do not run a second copy of the same large model in LM Studio alongside it.
 
-验收应同时核DSH完成回复、本地路由请求记录、同一个Strata实例的请求指标，无第二个引擎、无云端回退。接入试验状态见本机私有验收记录，未验内容不得标通过。
+For this workflow, Strata serves the role of a local model server; LM Studio is not required. This does not assert that it replaces every LM Studio feature.
 
-2026-10-31已完成DSH桌面两轮真实聊天：首轮数学和SQL概念回答正确；同会话追问正确并复用缓存。约30K输入的首轮DSH耗时227秒，解码8.8 token/s；追问DSH耗时19秒，输入30102、复用30077、解码10.1 token/s。不是工具调用、微信、记忆整理或1M长任务验收，也不承诺每次19秒。
+## Long context and privacy / 长上下文和本地边界
 
-该机器另有仅针对回环提供商的DSH传输扩展，避免底层HTTP默认超时覆盖设置；扩展包含机器安装位置，故本包没有复制。这里只提供连接参数，不声称任意DSH版本可直接获得同样的一小时等待。已有界面费用估算不能作为本地调用的账单依据。
+The tested engine is configured for 1,048,576 tokens (1024K). DSH's provider context setting must not exceed the loaded server setting, and history plus reserved output must fit. Client compression/output limits still apply. **Full 1M input and long-agent-task stability have not been accepted.** Do not simply disable every limit.
 
-计时口径：DSH耗时含宿主开销；引擎工作耗时不同。当前first_engine_token_s与duration_s的计时起点尚待核对，未作为本次首字速度宣传。
+模型推理在本机进行；DSH 的搜索、插件、远程工具或其他供应商是否联网，由各自配置决定。因此“本地模型”不等于整个客户端永不联网。保持服务仅监听回环地址；本说明不要求公网开放端口。
+
+Basic two-turn DSH chat and prompt reuse were verified. Tools, WeChat and memory are separate integrations, not implicitly covered by that check. The screenshot is a visual demonstration, not proof of all abilities described by the model itself.
+
+![Native N1X allocation and DSH connection](images/n1x-nvidia-strata-dsh.png)
+
+See [INSTALL](INSTALL.md), [BENCHMARKS](BENCHMARKS.md) and [FAQ](FAQ.md).

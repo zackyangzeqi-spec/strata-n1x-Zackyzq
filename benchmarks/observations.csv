@@ -1,0 +1,16 @@
+source,quantization,gpu_gib,ram_nominal_gib,expert_ram_cache_gb,prompt_tokens,reused_tokens,output_tokens,decode_tokens_s,first_engine_token_s,duration_s
+saved-native-desktop-observation,1.75,92,36,4,14309,14255,113,20,1.272,6.9
+saved-native-desktop-comparison,2.25,64,64,12,11548,0,736,9.3,69.454,148.7
+saved-native-desktop-comparison,2.25,64,64,16,11548,0,735,9.2,70.139,150
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,16229,0,1945,12,,287
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,56532,56317,2125,13.8,,158
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,54489,52932,1829,13.6,,148
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,51824,49504,1101,16.1,,90
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,48206,42547,1298,15.7,,128
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,41685,38679,862,13.9,,88
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,37513,33105,1166,14.9,,118
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,30754,30722,2352,11.8,,200
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,333,0,64,12.3,,11.2
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,29965,0,757,10.6,,277
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,295,0,57,10.6,,17.7
+maintainer-screenshot-rounded-visible-row,2.25,64,64,,6908,6303,15,7.3,,17.5
