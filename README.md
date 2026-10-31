@@ -2,9 +2,9 @@
 
 **让 N1X 128GB 笔记本成为本地 DeepSeek 工作台：原生 CUDA 推理、桌面模型管理、DeepSeek Harness 接入。**
 
-[下载安装包](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/releases/tag/v0.2.8-n1x.1) · [安装指南](docs/INSTALL.md) · [接入 DeepSeek Harness](docs/DSH.md) · [已有实测](docs/BENCHMARKS.md) · [常见问题](docs/FAQ.md) · [让 AI 协助](docs/AI-ASSISTED.md)
+[项目说明页](https://zackyangzeqi-spec.github.io/strata-n1x-Zackyzq/) · [下载安装包](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/releases/tag/v0.2.8-n1x.1) · [安装指南](docs/INSTALL.md) · [接入 DeepSeek Harness](docs/DSH.md) · [已有实测](docs/BENCHMARKS.md) · [常见问题](docs/FAQ.md) · [让 AI 协助](docs/AI-ASSISTED.md)
 
-**Strata N1X** 是由 **Zack_yzq** 维护、基于 [Strata](https://github.com/Niko1221/Strata) 的免费社区适配，面向 **NVIDIA RTX Spark N1X、128GB CPU/GPU 统一内存、Windows ARM64 笔记本**。它把本地模型加载、卸载、运行监控和本机 API 接入整理到一个桌面工作流中。
+**Strata N1X** 是由 **[Zack_yzq](https://github.com/zackyangzeqi-spec)** 维护、基于 [Strata](https://github.com/Niko1221/Strata) 的免费社区适配，面向 **NVIDIA RTX Spark N1X、128GB CPU/GPU 统一内存、Windows ARM64 笔记本**。它把本地模型加载、卸载、运行监控和本机 API 接入整理到一个桌面工作流中。
 
 本项目运行的是 **DeepSeek 官方于 2026 年 10 月 17 日更新的 [DeepSeek-V4.1-Flash-1017](https://api-docs.deepseek.com/zh-cn/updates/)** 的第三方量化版本，采用 [ISTA-DASLab GSQ-RCO GGUF](https://huggingface.co/ISTA-DASLab/DeepSeek-V4.1-Flash-1017-GSQ-RCO-GGUF) 路线。维护者已在自己的微软 N1X 128GB 笔记本上取得 **1.75 / 2.25bpw 实际模型回复**，并记录了 **DeepSeek Harness（DSH）两轮基础聊天与提示词缓存复用**。
 
@@ -79,13 +79,14 @@ flowchart TB
 
 ## 项目资料、来源与支持
 
+- [项目说明页维护](docs/PUBLISHING.md)：网页发布、分享图与搜索入口的维护方法。
 - [项目事实表](docs/PROJECT-FACTS.md)：模型身份、平台、版本、已验证范围与证据入口。
 - [适配说明](docs/DEVELOPMENT-NOTES.md)：从公开补丁理解本项目贡献，区分可确认实现与原因推断。
 - [源码构建](docs/BUILD.md)：基于上游 `870aedd9e1ebe1c91f94da93b59af17729f6c5c0` 的补丁；并非已经验证一键构建的完整源码分发。
 - [发布范围](docs/RELEASE-CHECKLIST.md)：独立干净账户、其他机器、完整 1M 输入、长任务稳定性等尚未全面验证。
 
-基于 [Niko1221/Strata](https://github.com/Niko1221/Strata)，保留 Strata、Project Maya、ggml 及依赖归属与许可。维护者为 **Zack_yzq**，应用显示名为 **strata_Zackyzq**。这是免费社区项目，不是 Microsoft、NVIDIA、DeepSeek 或 Strata 官方发行版；安装包目前未签名。适配代码按 [LICENSE](LICENSE) 授权，运行库及图片分别遵守 [ASSETS](docs/ASSETS.md) 和第三方许可。
+基于 [Niko1221/Strata](https://github.com/Niko1221/Strata)，保留 Strata、Project Maya、ggml 及依赖归属与许可。维护者为 **[Zack_yzq](https://github.com/zackyangzeqi-spec)**，应用显示名为 **strata_Zackyzq**。这是免费社区项目，不是 Microsoft、NVIDIA、DeepSeek 或 Strata 官方发行版；安装包目前未签名。适配代码按 [LICENSE](LICENSE) 授权，运行库及图片分别遵守 [ASSETS](docs/ASSETS.md) 和第三方许可。
 
-如果项目帮助你解决了 N1X 本地部署问题，欢迎 Star、分享具体使用体验，或在 [Issues](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/issues) 留下脱敏反馈。[微信／支付宝自愿支持](sponsorship/README.md) 不作为使用或反馈的前提，也不购买支持、优先回复或交付承诺。
+如果项目帮助你解决了 N1X 本地部署问题，欢迎 Star 收藏，也欢迎[关注 Zack_yzq 的后续项目](https://github.com/zackyangzeqi-spec)、分享具体使用体验，或在 [Issues](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/issues) 留下脱敏反馈。[微信／支付宝自愿支持](sponsorship/README.md) 不作为使用或反馈的前提，也不购买支持、优先回复或交付承诺。
 
 No model weights, credentials, private runtime profiles or raw development chats are distributed. The existing project/payment images and three demonstration screenshots retain the maintainer's publication authorization. Other private logs and conversations are excluded. This is a community preview, with no general compatibility or performance guarantee.

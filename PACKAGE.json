@@ -14,6 +14,11 @@
       "bytes": 674
     },
     {
+      "path": ".github/workflows/pages.yml",
+      "sha256": "141eea1fcf0ca31c7f44d8ea751ee65276085cea18cc0f40f053d76877b47abd",
+      "bytes": 1077
+    },
+    {
       "path": ".gitignore",
       "sha256": "e329c74e606d9d81dc9c1f9062b101bb2b77c18761c00a54a83cf9732266816a",
       "bytes": 137
@@ -59,9 +64,14 @@
       "bytes": 1801
     },
     {
+      "path": "docs/AI-ASSISTED.md",
+      "sha256": "c402baf41115f38d1ffdbfe3028b4fac265626fb7ee0bfadae829362fe1d0081",
+      "bytes": 12126
+    },
+    {
       "path": "docs/ASSETS.md",
-      "sha256": "c229c5c7fcbd66b19cc85c739dc806ce7a428450269042e7b08377f3072fb038",
-      "bytes": 1382
+      "sha256": "d9c75089b9e694aaf455acf1143536d28a46f282266966c1bf3583a59aa0e1ca",
+      "bytes": 1985
     },
     {
       "path": "docs/BENCHMARKS.md",
@@ -74,9 +84,14 @@
       "bytes": 6422
     },
     {
+      "path": "docs/DEVELOPMENT-NOTES.md",
+      "sha256": "a0b6d0edfdb4405738d928ad1299082760a2b1cc22561c00eaeb8f2240adec50",
+      "bytes": 18235
+    },
+    {
       "path": "docs/DSH.md",
-      "sha256": "f299ac23a5127e734235ff217f62d3d07dc052257f5bd1f59ba8657c3a2f0393",
-      "bytes": 6561
+      "sha256": "8d73b208179f663e5c03e1bc55d413ecea504c282291294bdd4e742ac9c8ac42",
+      "bytes": 7026
     },
     {
       "path": "docs/FAQ.md",
@@ -100,8 +115,18 @@
     },
     {
       "path": "docs/INSTALL.md",
-      "sha256": "2b0ff3b05cb40ab0e8683ee469fdaad0f0236a37f2329a0be581002e4250e8ac",
-      "bytes": 10971
+      "sha256": "0384287c183894378f85114166c806b418935a9a71816d9d08d946786bedc8af",
+      "bytes": 10985
+    },
+    {
+      "path": "docs/PROJECT-FACTS.md",
+      "sha256": "fc015f1dfa472602b2349a9403f5787a59978bf621a69b90c3c77778502bdf41",
+      "bytes": 5925
+    },
+    {
+      "path": "docs/PUBLISHING.md",
+      "sha256": "7adeb23950d21354b0ceacc15dfbc1965a213c02340099ad2e413e5635bb042a",
+      "bytes": 6765
     },
     {
       "path": "docs/RELEASE-CHECKLIST.md",
@@ -140,8 +165,53 @@
     },
     {
       "path": "README.md",
-      "sha256": "53e5bd7d09a182270ee5ac757c54d1835ab93791916d5284daa0f41a50a205d3",
-      "bytes": 8620
+      "sha256": "504144d8176af0e630a439d3eeb69bbbb1dba128572452d5395f4e927cef432d",
+      "bytes": 8974
+    },
+    {
+      "path": "site/.nojekyll",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "site/assets/favicon.svg",
+      "sha256": "ab141f2255cb27c8e67e2e66ef95aff6a25f57c619020f348524ebb3952b84dc",
+      "bytes": 342
+    },
+    {
+      "path": "site/assets/n1x-deepseek225-monitor.png",
+      "sha256": "9384a78aa93d0257e4bd4ae55da6133179b7c470bc3803652e9a6b19fe790f89",
+      "bytes": 227192
+    },
+    {
+      "path": "site/assets/n1x-nvidia-strata-dsh.png",
+      "sha256": "d8989364d9b40f67367a7a3b33f111e772f8c5e14a5655526abe429212d8d1e7",
+      "bytes": 506013
+    },
+    {
+      "path": "site/assets/social-preview.png",
+      "sha256": "db441e7b0350a617cb8ebadb42579b3a3c3d8ab02fa649200a9a5fb75c2194e4",
+      "bytes": 308643
+    },
+    {
+      "path": "site/assets/social-preview.svg",
+      "sha256": "3d6f2629946b8bc765113318a24f6f32b56bad6c05f20a9947f5d23a7da684b5",
+      "bytes": 2177
+    },
+    {
+      "path": "site/assets/styles.css",
+      "sha256": "8c54c165678ce607614b064f3f65511d050acb0e009bcdd72e330ed9465e3695",
+      "bytes": 23696
+    },
+    {
+      "path": "site/index.html",
+      "sha256": "f3a9df9fb11aa5d3358737211e2e2f5dbe90effa832ee3f2de897784e2ebad3f",
+      "bytes": 22007
+    },
+    {
+      "path": "site/sitemap.xml",
+      "sha256": "a0531547fd356ffcbe07baef7e98816a54b7812a5824f7283ccdd28545628460",
+      "bytes": 198
     },
     {
       "path": "sponsorship/alipay.jpg",
@@ -164,19 +234,9 @@
       "bytes": 1164
     },
     {
-      "path": "docs/AI-ASSISTED.md",
-      "sha256": "c402baf41115f38d1ffdbfe3028b4fac265626fb7ee0bfadae829362fe1d0081",
-      "bytes": 12126
-    },
-    {
-      "path": "docs/DEVELOPMENT-NOTES.md",
-      "sha256": "a0b6d0edfdb4405738d928ad1299082760a2b1cc22561c00eaeb8f2240adec50",
-      "bytes": 18235
-    },
-    {
-      "path": "docs/PROJECT-FACTS.md",
-      "sha256": "fc015f1dfa472602b2349a9403f5787a59978bf621a69b90c3c77778502bdf41",
-      "bytes": 5925
+      "path": "tools/update_public_inventory.py",
+      "sha256": "26285a63e092a70469318fb5cd2ca34bc818091891dc1fad9a21dd90d3851fff",
+      "bytes": 3816
     }
   ],
   "privacy_scan": "Known private markers absent from text. Five previously authorized project/payment images plus three explicitly authorized unredacted demonstration screenshots are hash-pinned exceptions. No private runtime profiles, credentials or model weights included.",
@@ -192,7 +252,9 @@
   "authorized_demonstration_screenshots": {
     "docs/images/n1x-deepseek225-monitor.png": "9384a78aa93d0257e4bd4ae55da6133179b7c470bc3803652e9a6b19fe790f89",
     "docs/images/n1x-deepseek225-requests.png": "dd922713a74eeca8ad68cf7f1e5356fbe84959b9b5040a7172cb93b760cc9c24",
-    "docs/images/n1x-nvidia-strata-dsh.png": "d8989364d9b40f67367a7a3b33f111e772f8c5e14a5655526abe429212d8d1e7"
+    "docs/images/n1x-nvidia-strata-dsh.png": "d8989364d9b40f67367a7a3b33f111e772f8c5e14a5655526abe429212d8d1e7",
+    "site/assets/n1x-deepseek225-monitor.png": "9384a78aa93d0257e4bd4ae55da6133179b7c470bc3803652e9a6b19fe790f89",
+    "site/assets/n1x-nvidia-strata-dsh.png": "d8989364d9b40f67367a7a3b33f111e772f8c5e14a5655526abe429212d8d1e7"
   },
   "documentation_update": {
     "date": "2026-10-31",
@@ -204,5 +266,14 @@
     "inventory_basis": "Final staged Git index bytes; PACKAGE.json excluded from its own file list.",
     "historical_checks_note": "Existing patch_check, runtime-check and image-authorization statements retain their baseline scope; this update adds static documentation checks only.",
     "local_development_summary": "Sanitized existing T-048 records: native desktop route, RAM-cache comparison, loopback HTTP transport, same-machine reinstall and historical download lock metadata; no new runs."
+  },
+  "visibility_update": {
+    "date": "2026-10-31",
+    "source_repository_commit": "44553414cf7708d5b09a56e42cedd4940c79ad98",
+    "scope": "Static project page, public entry-point documentation, and publication tooling.",
+    "runtime_and_release_assets_changed": false,
+    "new_model_runs": false,
+    "inventory_basis": "Final staged Git index bytes; PACKAGE.json excluded from its own file list.",
+    "historical_checks_note": "Earlier patch, runtime and image-authorization statements retain their baseline scope; this update adds static publication checks only."
   }
 }
