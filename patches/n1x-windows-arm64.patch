@@ -1,0 +1,1057 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -9,6 +9,19 @@
+ # and is wrong about its own performance, which is the worst of both outcomes.
+ cmake_minimum_required(VERSION 3.24)
+ project(strata VERSION 0.1.54 LANGUAGES CXX)
++# Local N1X build: clang-cl 19 ARM64 emits undefined SEH assembler labels at /O2
++# in these translation units. Keep the workaround opt-in and scoped; CUDA
++# kernels, model parameters and all other compilation units are unchanged.
++option(STRATA_WINDOWS_ARM64_CLANG19_SEH_WORKAROUND "Use /O1 for clang-cl 19 ARM64 SEH compilation failures" OFF)
++if(STRATA_WINDOWS_ARM64_CLANG19_SEH_WORKAROUND)
++  if(NOT (WIN32 AND MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$"
++          AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
++          AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19
++          AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 20))
++    message(FATAL_ERROR "The SEH workaround is specific to clang-cl 19 on Windows ARM64")
++  endif()
++  set_property(SOURCE src/core/layer.cpp src/core/verify.cpp src/prefill/prefill.cpp APPEND PROPERTY COMPILE_OPTIONS /O1)
++endif()
+ # EXPERIMENTAL: the Intel Arc engine, the SYCL port in sycl/ (PR #423; icpx + oneMKL, docs/INTEL_ARC.md). It is its
+ # own project that takes the unported sources from src/; with this on, nothing below is configured.
+ option(STRATA_ENABLE_SYCL "EXPERIMENTAL: build the Intel Arc (SYCL) engine from sycl/ - docs/INTEL_ARC.md" OFF)
+@@ -918,6 +931,7 @@
+     add_executable(strata-dsv41 src/dsv41/ds4_main.cpp src/dsv41/ds4_model.cu src/dsv41/ds4_kernels.cu src/dsv41/ds4_vision.cu
+                    src/dsv41/ds4_gguf.cu src/dsv41/ds4_gguf_cpu.cpp src/dsv41/ds4_iq.cu src/dsv41/ds4_iq_cpu.cpp
+                    src/dsv41/ds4_tq.cu src/dsv41/ds4_tq_cpu.cpp src/dsv41/ds4_gg_cpu.cpp src/dsv41/ds4_packinfo.cpp)
++    strata_utf8_manifest(strata-dsv41)
+     # the commit the binary was built from, readable with --version (set -DSTRATA_BUILD_ID=... for a tree without .git)
+     if(NOT STRATA_BUILD_ID AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/BUILD_ID)   # (a git archive has no .git: the packer writes the commit here)
+       file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/BUILD_ID STRATA_BUILD_ID LIMIT_COUNT 1)
+--- a/apps/desktop/src-tauri/src/desktoplog.rs
++++ b/apps/desktop/src-tauri/src/desktoplog.rs
+@@ -39,11 +39,10 @@
+ /// Windows: `%LOCALAPPDATA%\Strata`, the folder the host and Control already use for the components and the install.
+ #[cfg(windows)]
+ fn platform_data_dir() -> PathBuf {
+-    std::env::var_os("LOCALAPPDATA")
+-        .map(PathBuf::from)
+-        .filter(|p| p.is_absolute())
+-        .or_else(|| std::env::var_os("USERPROFILE").map(|h| PathBuf::from(h).join("AppData").join("Local")))
+-        .unwrap_or_else(std::env::temp_dir)
++    std::env::var_os("STRATA_ZACK_DATA_ROOT").map(PathBuf::from)
++        .unwrap_or_else(|| std::env::var_os("USERPROFILE")
++            .map(|h| PathBuf::from(h).join(".strata_Zackyzq"))
++            .unwrap_or_else(|| std::env::temp_dir().join("strata_Zackyzq-data")))
+         .join("Strata")
+ }
+ 
+--- a/apps/desktop/src-tauri/src/main.rs
++++ b/apps/desktop/src-tauri/src/main.rs
+@@ -229,6 +229,15 @@
+ 
+ /// What every host start gets, packaged or self-test: acquiring is forbidden, Control is where the bundle put it.
+ fn apply_runtime_policy(cmd: &mut Command, res: &Path) {
++    #[cfg(windows)]
++    {
++        let root = std::env::var_os("STRATA_ZACK_DATA_ROOT").map(PathBuf::from)
++            .unwrap_or_else(|| PathBuf::from(std::env::var_os("USERPROFILE").unwrap_or_default()).join(".strata_Zackyzq"));
++        cmd.env("LOCALAPPDATA", &root)
++            .env("STRATA_HOME", root.join("home"))
++            .env("STRATA_COMPONENTS_DIR", root.join("Strata").join("components"))
++            .env("STRATA_INSTALL_DIR", root.join("Strata").join("install"));
++    }
+     cmd.env("STRATA_NO_ACQUIRE", "1");
+     if let Some(dir) = control_dir(res) {
+         cmd.env("STRATA_CONTROL_DIR", dir);
+@@ -628,7 +637,8 @@
+     let mut cmd = Command::new(&python);
+     cmd.arg(dir.join("strata.py")).arg("--version").current_dir(dir)
+         .env_remove("PYTHONHOME").env_remove("PYTHONPATH").env_remove("VIRTUAL_ENV")
+-        .env("PYTHONNOUSERSITE", "1").env("PYTHONDONTWRITEBYTECODE", "1").env("STRATA_NO_ACQUIRE", "1");
++        .env("PYTHONNOUSERSITE", "1").env("PYTHONDONTWRITEBYTECODE", "1").env("STRATA_NO_ACQUIRE", "1")
++        .env("PYTHONUTF8", "1").env("PYTHONIOENCODING", "utf-8");
+     hide_console(&mut cmd);
+     match cmd.output() {
+         Ok(out) => {
+@@ -949,7 +959,7 @@
+ fn open_window(app: &tauri::App, port: u16, shell_token: &str) -> Result<(), Box<dyn std::error::Error>> {
+     let origin = format!("http://127.0.0.1:{port}");
+     let url = origin.parse().expect("a valid loopback URL");
+-    let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url)).title("Strata").inner_size(1440.0, 920.0).min_inner_size(900.0, 600.0);
++    let builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url)).title("strata_Zackyzq").inner_size(1440.0, 920.0).min_inner_size(900.0, 600.0);
+     // Dropping pictures on the chat (QA report 1, item 4). Windows: the shell's own file-drop handler is off, because with it on the system hands
+     // the dropped file to the shell and the page never sees it; with it off the page gets ordinary drag and drop events (apps/host DropZone), as
+     // in a browser. Linux and macOS: the page gets the drag events but WebKit gives it no files, so the handler stays on and the shell passes the
+@@ -966,6 +976,13 @@
+     );
+     #[cfg_attr(windows, allow(unused_variables))]
+     let window = builder.build()?;
++    // Optional personal icon is user data, not a private image in the installer.
++    #[cfg(windows)]
++    if let Some(root) = desktoplog::data_dir().parent() {
++        if let Ok(icon) = tauri::image::Image::from_path(root.join("home").join("branding").join("avatar.png")) {
++            let _ = window.set_icon(icon);
++        }
++    }
+     #[cfg(not(windows))]
+     {
+         let target = window.clone();
+--- a/apps/desktop/src-tauri/src/updater.rs
++++ b/apps/desktop/src-tauri/src/updater.rs
+@@ -58,6 +58,10 @@
+ }
+ 
+ fn updater_for(app: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
++    // Community builds have no verified update feed. Never install an upstream replacement.
++    if app.config().identifier == "community.strata.Zack_yzq.n1x" {
++        return Err("strata_Zackyzq: no verified community update feed; install a reviewed release manually".into());
++    }
+     match endpoint_override() {
+         Some(url) => {
+             let url: tauri::Url = url.parse().map_err(|e| format!("bad update endpoint: {e}"))?;
+--- a/apps/desktop/src-tauri/tauri.conf.json
++++ b/apps/desktop/src-tauri/tauri.conf.json
+@@ -1,7 +1,7 @@
+ {
+   "$schema": "https://schema.tauri.app/config/2",
+-  "productName": "Strata",
+-  "identifier": "ai.strata.desktop",
++  "productName": "strata_Zackyzq",
++  "identifier": "community.strata.Zack_yzq.n1x",
+   "build": {
+     "frontendDist": "../../host/dist"
+   },
+@@ -16,28 +16,16 @@
+   "bundle": {
+     "active": true,
+     "targets": [
+-      "dmg",
+-      "app",
+-      "nsis",
+-      "appimage",
+-      "deb"
++      "nsis"
+     ],
+     "icon": [
+       "icons/icon.png",
+       "icons/icon.ico"
+     ],
+     "category": "DeveloperTool",
+-    "shortDescription": "Local AI, tuned to one model.",
++    "shortDescription": "N1X Windows ARM64 community adaptation",
+     "longDescription": "Strata runs one local model, tuned to your machine. Desktop and Terminal share the same model inventory, profiles, runtime and agent sessions.",
+-    "resources": {
+-      "../../host/dist": "host/dist",
+-      "../../host/server": "host/server",
+-      "../../host/package.json": "host/package.json",
+-      "resources/node": "node",
+-      "resources/control": "control",
+-      "resources/harness": "harness",
+-      "resources/engine-bundle": "engine-bundle"
+-    },
++    "resources": {},
+     "linux": {
+       "appimage": {
+         "bundleMediaFramework": true
+@@ -51,10 +39,10 @@
+     "windows": {
+       "nsis": {
+         "installMode": "currentUser",
+-      "template": "nsis/installer.nsi",
+-      "headerImage": "nsis/header.bmp",
+-      "sidebarImage": "nsis/sidebar.bmp",
+-      "installerIcon": "icons/icon.ico",
++        "template": "nsis/installer.nsi",
++        "headerImage": "nsis/header.bmp",
++        "sidebarImage": "nsis/sidebar.bmp",
++        "installerIcon": "icons/icon.ico",
+         "compression": "lzma",
+         "languages": [
+           "English"
+@@ -65,9 +53,7 @@
+   "plugins": {
+     "updater": {
+       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI2QjA5OTk5MDU1MjFGNUUKUldSZUgxSUZtWm13dHNGRU40N2xOUjdZZGpvcGl0NTB2WGxnS3VTc2RlakpSbnBxUkxndHNFY0oK",
+-      "endpoints": [
+-        "https://github.com/Niko1221/Strata/releases/latest/download/latest.json"
+-      ],
++      "endpoints": [],
+       "windows": {
+         "installMode": "passive"
+       }
+--- a/apps/host/index.html
++++ b/apps/host/index.html
+@@ -3,7 +3,7 @@
+   <head>
+     <meta charset="utf-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+-    <title>Strata — local AI, tuned to one model</title>
++    <title>strata_Zackyzq — 本地 AI</title>
+     <meta name="description" content="Strata runs one local model, tuned to your hardware." />
+     <meta name="color-scheme" content="light dark" />
+     <meta name="theme-color" content="#f9fafb" />
+--- a/apps/host/server/agent/agent-bridge.mjs
++++ b/apps/host/server/agent/agent-bridge.mjs
+@@ -22,6 +22,7 @@
+ import { GatewayClient } from './gateway-client.mjs';
+ import { HarnessProcess, resolveHarness, redact, stopStaleAgent } from './harness-runtime.mjs';
+ import { StatusReporter } from './status.mjs';
++import { loopbackStrataProgress, progressed } from './loopback-strata-progress.mjs';
+ import { buildProfile, routeFor, MODE_PRESETS, modeOf, effortOf, localOutputBudget, compactionHeadroom } from './profile.mjs';
+ import { TurnProjector, parseArguments as parseArgs } from './events.mjs';
+ import { ChildProjector } from './children.mjs';
+@@ -448,8 +449,25 @@
+      * quiet, a lost event) the turn is stopped and ended with a plain message instead of showing "thinking" forever. A running tool gets
+      * a longer allowance than a quiet model (a build can be silent for minutes). Whatever the assistant finished is kept.
+      */
+-    turn.watchdog = setInterval(() => {
+-      if (turn.finished || turn.stopping) return;
++    turn.watchdog = setInterval(async () => {
++      if (turn.finished || turn.stopping || turn.progressChecking) return;
++      // 与官方local分支同样保留30分钟进度宽限；仅本机单会话、单请求。
++      if (turn.route?.kind === 'api' && activeTurns() === 1 && Date.now() - turn.heard < engineGraceMs) {
++        turn.progressChecking = true;
++        let progress = null;
++        try { progress = await loopbackStrataProgress(turn.route, connections()); }
++        finally { turn.progressChecking = false; }
++        if (turn.finished || turn.stopping) return;
++        const moved = progressed(turn.loopbackProgress, progress);
++        // 重试产生新请求时先重设观察基线，只有后续计数推进才续期。
++        if (progress && (!turn.loopbackProgress || progress.request !== turn.loopbackProgress.request)) turn.loopbackProgress = progress;
++        if (moved) {
++          turn.loopbackProgress = progress;
++          turn.lastActivity = Date.now();
++          if (!progress.generated) reporter.set({phase: 'preparing', code: 'local-strata-prefill', text: `本机 Strata 正在处理输入：${progress.read} / ${progress.total} tokens`, args: {tokens: progress.read}});
++          return;
++        }
++      }
+       const toolRunning = [...projector.tools.values()].some(x => x.card?.state === 'running' || x.card?.state === 'proposed') || pending.size > 0 && pendingFor(chatId).length > 0;
+       const limit = toolRunning ? stallToolMs : stallMs;
+       // A local engine reading a long prompt sends the Harness nothing for minutes (#3623). Its /metrics progress counts as activity,
+--- a/apps/host/server/agent/profile.mjs
++++ b/apps/host/server/agent/profile.mjs
+@@ -271,6 +271,8 @@
+       api: protocol,
+       baseURL,
+       ...(conn.apiKey || keyless ? { apiKeyEnv: keyEnv } : {}),
++      // 已核验的N1X本机Strata服务沿用官方local分支60分钟流等待，云端保持原值。
++      ...(baseURL.replace(/\/$/, '') === 'http://127.0.0.1:8095/v1' ? { streamIdleTimeoutMs: 60 * 60_000 } : {}),
+       ...(ownServer ? { compat: THINKING_COMPAT } : openRouter ? { compat: { thinkingFormat: 'openrouter' } } : {}),
+       models: conn.models.map(m => ({
+         id: m.id, name: m.name || m.id,
+--- a/apps/host/server/index.mjs
++++ b/apps/host/server/index.mjs
+@@ -1,5 +1,8 @@
+ #!/usr/bin/env node
+ import { engineProgressMark } from './agent/engine-progress.mjs';
++import { localDeepSeekCapability } from './n1x-native-engine.mjs';
++const communityEngine = localDeepSeekCapability();
++if (communityEngine) process.env.STRATA_DSV41_EXE = communityEngine.exe;
+ import './system-ca.mjs';        // #3722: the operating system's certificates, before any HTTPS request
+ import { createCloudflare } from './cloudflare.mjs';
+ import { createConnectorInstaller } from './cloudflared-install.mjs';
+@@ -989,12 +992,20 @@
+ });
+ 
+ async function api(req, res, path, method, url) {
++  // Optional local-only avatar. This fixed path cannot read arbitrary files.
++  if(path==='/api/branding/avatar'&&method==='GET'){
++    const local=join(process.env.STRATA_HOME??join(homedir(),'.strata'),'branding','avatar.png');
++    const avatar=existsSync(local)?local:join(DIST,'brand','project-avatar.png');
++    try { const data=readFileSync(avatar); res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'}); return res.end(data); }
++    catch { res.writeHead(204,{'Cache-Control':'no-store'}); return res.end(); }
++  }
+   if(path==='/api/fonts'&&method==='GET')return json(res,200,await systemFonts());
+   if (storageChanging && !['GET', 'OPTIONS'].includes(method)) return error(res, 409, 'Wait for the model folder check to finish.');
+   // --- events -------------------------------------------------------------
+   if (path === '/api/events') return hub.add(res);
+   if(path.startsWith('/api/native')){try{
+   if(path==='/api/native'&&method==='GET')return json(res,200,await native.refresh(url.searchParams.get('refresh')==='1'));
++  if(path==='/api/native/attach-linux'&&method==='POST')return json(res,200,await native.attachLinux());
+   if(path==='/api/native'&&method==='PATCH')return json(res,200,await native.configure(await readBody(req)));
+   if(path==='/api/native/directory'&&method==='POST')return json(res,200,native.setDownloadDirectory((await readBody(req)).directory));
+   /* Settings > Storage > Models folder: pick (or type) a folder, say what it means, then start the choice. Copying is Control's (strata models move). */
+@@ -1298,6 +1309,7 @@
+       control: CONTROL ? { dir: CONTROL.dir, python: CONTROL.python, version: control.version, bundle: CONTROL.bundle } : null,
+       engine,
+       engineSetup: !bundledEngineSettled,
++      nativeEngines: { deepseek41: localDeepSeekCapability() },
+       componentsDir: componentsDirectory(),
+       acquisition: { forbidden: acquisitionForbidden(), env: process.env.STRATA_NO_ACQUIRE ?? null },
+     });
+--- a/apps/host/server/native-control.mjs
++++ b/apps/host/server/native-control.mjs
+@@ -25,6 +25,9 @@
+ import { friendlyModelName } from './model-names.mjs';
+ import { parseSaved as parseRoles, mirror as mirrorRoles } from './gpu-roles.mjs';
+ import { configContextLimit } from './dsv41-context.mjs';
++import { flagValue, applyN1xModelSettings } from './n1x-model-settings.mjs';
++import { localDeepSeekEngine, localDeepSeekCapability } from './n1x-native-engine.mjs';
++import { ATTACHED_ID, createN1xAttachment } from './n1x-linux-attachment.mjs';
+ 
+ const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
+ const safeId=value=>typeof value==='string'&&/^[a-z0-9](?:[a-z0-9_-]|\.(?!\.)){0,79}$/i.test(value);   /* a dot inside the name: deepseek-v4.1-flash-ist-das-2.00bpw */
+@@ -40,6 +43,18 @@
+  let child=null,seq=0,buffer='',pending=new Map(),definitions=[],refreshing=null,lastRead=0,connecting=null;
+  let snapshot={available:false,repo:preferences.repo,summary:'Connect a local Strata installation.',catalog:null,installed:null,hardware:null,error:null};
+  const instances=new Map(),processes=new Map(),jobs=new Map(),logs=[];
++ const linuxAttachment=createN1xAttachment(fetcher);
++ let attachmentLastProbe=0,attachmentProbe=null;
++ // 只接管已运行的指定本机服务；不启动WSL、不加载模型、不应用Windows资源参数。
++ async function attachLinux({remember=true}={}){
++  const instance=await linuxAttachment.instance();
++  if(!instance)throw new Error('本机Linux Strata尚未加载模型，请先使用已有服务启动入口。');
++  if([...instances.values()].some(i=>i.id!==ATTACHED_ID&&i.port===instance.port))throw new Error('该端口已被另一实例管理。');
++  instances.set(ATTACHED_ID,instance);defaultId??=ATTACHED_ID;
++  if(remember){preferences={...preferences,n1xLinuxAttachment:true};writeFileSync(settingsPath,JSON.stringify(preferences,null,2),{mode:0o600});}
++  emit();ensurePoll();return state();
++ }
++ function forgetLinux(){preferences={...preferences,n1xLinuxAttachment:false};writeFileSync(settingsPath,JSON.stringify(preferences,null,2),{mode:0o600});instances.delete(ATTACHED_ID);if(defaultId===ATTACHED_ID)defaultId=instances.keys().next().value??null;emit();return state();}
+  const savedJobs=readJson(join(directory,'native-jobs.json'),[]);/* An app update ends the app on purpose: the installer replaces it and starts it again. The job that asked for it was saved as running together with the app version it started from (appUpdateFrom); a start that finds a different version knows the update finished, instead of calling it an interrupted operation. */
+  const thisAppVersion=()=>process.env.STRATA_APP_VERSION||null;
+  /* A record an OLDER host wrote (no appUpdateFrom): the app's own program file was replaced after the job began, so the installer finished. <install>/host/server is ROOT's parent chain: ROOT = <install>/host. */
+@@ -63,7 +78,7 @@
+  const updateLog=line=>{try{console.log(`update · ${line}`);}catch{/* no console */}};
+  const NO_INSTALL='Installing, updating, tuning with calibration or rolling back model files and engines happens from the Terminal (strata install), never while the app runs.';
+  let defaultId=null,timer=null,closing=false,polling=false;
+- const emit=()=>{const value=state();writeFileSync(join(directory,'native-jobs.json'),JSON.stringify(value.jobs),{mode:0o600});changed(value);};
++ const emit=()=>{if(closing)return;const value=state();writeFileSync(join(directory,'native-jobs.json'),JSON.stringify(value.jobs),{mode:0o600});changed(value);};
+  const append=(instanceId,line)=>{logs.push({at:new Date().toISOString(),instanceId,line:String(line).slice(0,2000)});if(logs.length>400)logs.shift();};
+  function diskSpace(path){try{const s=statfsSync(path);return {free:Number(s.bavail)*Number(s.bsize),total:Number(s.blocks)*Number(s.bsize)};}catch{return null;}}
+  /* Does the engine in this release serve DFlash2? Control knows (strata_control/drafting.py); asked once, false until it answers. The Models screen offers the choice only when true. */
+@@ -88,7 +103,7 @@
+   for(const name of names){const path=join(dir,name),config=readJson(path,null);if(!config||typeof config!=='object')continue;
+    const next={...config,...(config.cwd!==undefined?{cwd:fix(config.cwd)}:{}),...(Array.isArray(config.args)?{args:config.args.map(fix)}:{})};
+    if(JSON.stringify(next)!==JSON.stringify(config)){try{writeModelConfig(path,next);}catch{/* read-only folder: the load reports it */}}}}
+- function installedInfo(info){if(!info)return info;return {...info,models:(info.models??[]).map(entry=>{const cfg=/^strata-[a-z0-9_.-]+\.json$/i.test(entry.config??'')?readJson(entry.configPath??join(repo(),entry.config)):{};const at=cfg.args?.indexOf('--native')??-1,nativeFile=at>=0?cfg.args[at+1]:null;const dataFolder=typeof nativeFile==='string'&&basename(dirname(dirname(nativeFile)))==='models'?dirname(dirname(dirname(nativeFile))):info.data_folder;/* A model the person pointed at their own GGUF folder (not <data>/models/<tag>): remembered, so a later load runs setup with that folder again instead of downloading the files (#3199). */const ownGgufDir=typeof nativeFile==='string'&&basename(dirname(dirname(nativeFile)))!=='models'&&existsSync(nativeFile)?dirname(nativeFile):undefined;return {...entry,ownGgufDir,contextMax:configContextLimit(cfg)??undefined,diskGb:entry.diskGb??entry.disk_gb,diskBytes:entry.diskBytes??entry.disk_bytes,sharedBytes:entry.sharedBytes??entry.shared_bytes,removableGb:entry.removableGb??entry.removable_gb,dataFolder,visionPrepared:!!cfg.vision,/* The picture files are prepared when the run config has a vision section: the Models screen then loads straight away instead of running setup again (it used to read 'off' for every model, which sent every load of a picture-capable model through "Apply settings and load", and setup writes the arguments, the draft layer and the reader back each time). */images:cfg.vision?'yes':'off',draftLayer:cfg.mtp!==false,drafting:cfg.drafting??'auto',/* Picture reading is ON unless the person turned it off: no saved choice and not loaded is undefined, not false (owner rule: pictures on by default). */visionEnabled:cfg.ui_vision_enabled??(()=>{const running=[...instances.values()].find(i=>i.model===entry.model&&i.status==='ready');return running?!!running.vision:undefined;})(),visionDevice:cfg.ui_vision_device,resourceProfile:cfg.ui_resource_profile,lowRamMode:cfg.args?.includes('--resident-experts')?'resident':cfg.args?.includes('--mmap-experts')?'mmap':'auto'};})};}
++ function installedInfo(info){if(!info)return info;return {...info,models:(info.models??[]).map(entry=>{const cfg=/^strata-[a-z0-9_.-]+\.json$/i.test(entry.config??'')?readJson(entry.configPath??join(repo(),entry.config)):{};const at=cfg.args?.indexOf('--native')??-1,nativeFile=at>=0?cfg.args[at+1]:null;const dataFolder=typeof nativeFile==='string'&&basename(dirname(dirname(nativeFile)))==='models'?dirname(dirname(dirname(nativeFile))):info.data_folder;/* A model the person pointed at their own GGUF folder (not <data>/models/<tag>): remembered, so a later load runs setup with that folder again instead of downloading the files (#3199). */const ownGgufDir=typeof nativeFile==='string'&&basename(dirname(dirname(nativeFile)))!=='models'&&existsSync(nativeFile)?dirname(nativeFile):undefined;return {...entry,ownGgufDir,contextMax:configContextLimit(cfg)??undefined,diskGb:entry.diskGb??entry.disk_gb,diskBytes:entry.diskBytes??entry.disk_bytes,sharedBytes:entry.sharedBytes??entry.shared_bytes,removableGb:entry.removableGb??entry.removable_gb,dataFolder,visionPrepared:!!cfg.vision,/* The picture files are prepared when the run config has a vision section: the Models screen then loads straight away instead of running setup again (it used to read 'off' for every model, which sent every load of a picture-capable model through "Apply settings and load", and setup writes the arguments, the draft layer and the reader back each time). */images:cfg.vision?'yes':'off',draftLayer:cfg.mtp!==false,drafting:localDeepSeekEngine(cfg)?flagValue(cfg.args,'--dspark')??'auto':cfg.drafting??'auto',/* Picture reading is ON unless the person turned it off: no saved choice and not loaded is undefined, not false (owner rule: pictures on by default). */visionEnabled:cfg.ui_vision_enabled??(()=>{const running=[...instances.values()].find(i=>i.model===entry.model&&i.status==='ready');return running?!!running.vision:undefined;})(),visionDevice:cfg.ui_vision_device,resourceProfile:cfg.ui_resource_profile,lowRamMode:cfg.args?.includes('--resident-experts')?'resident':cfg.args?.includes('--mmap-experts')?'mmap':'auto'};})};}
+  function installRoot(){const found=[preferences.installDir].find(d=>d&&existsSync(d));if(found)return realpathSync(found);mkdirSync(defaultInstall(),{recursive:true});return realpathSync(defaultInstall());}
+  /* The settings file Strata Control and the installer read (control-runtime.mjs sets STRATA_SETTINGS_FILE to it): the app's data folder is written there. */
+  function controlSettingsFile(){return process.env.STRATA_SETTINGS_FILE||join(dirname(componentsDirectory()),'app-settings.json');}
+@@ -122,7 +137,7 @@
+    const engine=await control.engine();
+    const installer=await mcpCall('strata_status',{hardware:true}).catch(error=>({error:error.message}));
+    const disk=Object.fromEntries((installer.installed?.models??[]).map(m=>[m.model,{diskGb:m.disk_gb,diskBytes:m.disk_bytes,sharedBytes:m.shared_bytes,removableGb:m.removable_gb,partsMissing:m.parts_missing??0,missingFiles:m.missing_files}]));
+-   const models=(list.models??[]).filter(m=>m.component_status!=='invalid'&&m.source_config).map(m=>({...(disk[m.id]??{}),model:m.id,config:basename(m.source_config),configPath:m.source_config,model_name:m.name,context:m.context_tokens??0,backend:m.backend,ready:m.component_status==='present'&&!(disk[m.id]?.partsMissing),missing:missingNames(m.missing,disk[m.id]?.missingFiles),images:'off',port:undefined,last_used:null}));
++   const models=(list.models??[]).filter(m=>m.component_status!=='invalid'&&m.source_config).map(m=>({...(disk[m.id]??{}),model:m.id,config:basename(m.source_config),configPath:m.source_config,localEngine:localDeepSeekEngine(readJson(m.source_config)),model_name:m.name,context:m.context_tokens??0,backend:m.backend,ready:m.component_status==='present'&&!(disk[m.id]?.partsMissing),missing:missingNames(m.missing,disk[m.id]?.missingFiles),images:'off',port:undefined,last_used:null}));
+    const cores=os.cpus().length;
+    return {summary:engine.usable?`Strata Control is ready; engine ${engine.engine.version} (${engine.engine.platform}-${engine.engine.backend}).`:(engine.notice??'No engine for this PC was found.'),
+     installDir:list.install_dir,engine:{usable:engine.usable,notice:engine.notice,wrongMake:engine.wrongMake===true,version:engine.engine?.version??null,backend:engine.backend,componentsDir:engine.components_dir,previous:engine.previous??null,pinned:engine.pinned??null,updateNotice:engine.update_notice??null},
+@@ -137,15 +152,20 @@
+  async function refresh(force=false){
+   if(ready)await ready.catch(()=>{});
+   if(closing)return state();
++  // 桌面先启动、Linux后启动或换模型后，也能重新发现；只有GET，不自动加载。
++  if(preferences.n1xLinuxAttachment&&!instances.has(ATTACHED_ID)&&(force||Date.now()-attachmentLastProbe>=10000)){
++   if(!attachmentProbe){attachmentLastProbe=Date.now();attachmentProbe=attachLinux({remember:false}).catch(error=>append(ATTACHED_ID,error.message)).finally(()=>{attachmentProbe=null;});}
++   await attachmentProbe;
++  }
+   /* A read that is not forced never makes the window wait for the (slow) status of Control: it gets the last state at once, and a stale one
+      is refreshed in the background. Only the first read, and a forced one after an operation, waits. */
+   if(refreshing)return !force&&snapshot.available?state():force?refreshing.then(()=>refresh(true)):refreshing;      /* a forced read that meets one already running (started before an engine update finished) waits for it and reads again, so it never settles on the old answer */if(!force&&Date.now()-lastRead<45000)return state();
+   probeDrafting();
+-  refreshing=(async()=>{try{const [catalog,status]=packaged?await (async()=>{const s=await tool('strata_status',{hardware:true});const c=await tool('strata_models').catch(error=>({families:[],contexts:[],recommendation:{family:null,model:null},context_note:'',error:error.message}));return [c,s];})():await Promise.all([tool('strata_models'),tool('strata_status',{hardware:true})]);let visionReader=false;if(packaged){try{const e=await control.engine();const root=e?.engine?.root??(e?.engine?.exe?dirname(e.engine.exe):'');visionReader=!!root&&['strata-vision','strata-vision.exe'].some(n=>existsSync(join(root,n)));}catch{visionReader=false;}}const markImages=c=>c&&Array.isArray(c.families)?{...c,families:c.families.map(f=>({...f,imagesCapable:!!f.images,images:!!f.images&&visionReader,sizes:(f.sizes??[]).map(s=>({...s,imagesCapable:!!s.images,images:!!s.images&&visionReader}))}))}:c;snapshot={available:true,repo:packaged?status.installDir:repo(),version:packaged?(control.version??null):await execute('git',['describe','--tags','--always'],repo()).then(s=>s.trim()).catch(()=>null),summary:status.summary,catalog:markEngine(packaged?markImages(catalog):catalog,status.engine),engineInfo:{version:status.engine?.version??null,source:status.engine?.source??null},visionReader:packaged?visionReader:true,installed:installedInfo(status.installed),hardware:status.hardware,error:null,install:status.install,external:status.running??null,...(packaged?{packaged:true,installDir:status.installDir,engine:status.engine,installerError:status.installerError}:{})};lastRead=Date.now();if(status.install?.running&&![...jobs.values()].some(j=>j.state==='running'))begin('install',j=>watchInstall(j,status.install));}catch(error){snapshot={...snapshot,available:false,error:error.message};lastRead=Date.now();}emit();return state();})().finally(()=>{refreshing=null;});const run=refreshing;if(!force&&snapshot.available){run.catch(()=>{});return state();}return run;
++  refreshing=(async()=>{try{const [catalog,status]=packaged?await (async()=>{const s=await tool('strata_status',{hardware:true});const c=await tool('strata_models').catch(error=>({families:[],contexts:[],recommendation:{family:null,model:null},context_note:'',error:error.message}));return [c,s];})():await Promise.all([tool('strata_models'),tool('strata_status',{hardware:true})]);let visionReader=false;if(packaged){try{const e=await control.engine();const root=e?.engine?.root??(e?.engine?.exe?dirname(e.engine.exe):'');visionReader=!!root&&['strata-vision','strata-vision.exe'].some(n=>existsSync(join(root,n)));}catch{visionReader=false;}}const markImages=c=>c&&Array.isArray(c.families)?{...c,families:c.families.map(f=>({...f,imagesCapable:!!f.images,images:!!f.images&&visionReader,sizes:(f.sizes??[]).map(s=>({...s,imagesCapable:!!s.images,images:!!s.images&&visionReader}))}))}:c;snapshot={available:true,repo:packaged?status.installDir:repo(),version:packaged?(control.version??null):await execute('git',['describe','--tags','--always'],repo()).then(s=>s.trim()).catch(()=>null),summary:status.summary,catalog:markEngine(packaged?markImages(catalog):catalog,status.engine),localEngines:{deepseek41:localDeepSeekCapability()},engineInfo:{version:status.engine?.version??null,source:status.engine?.source??null},visionReader:packaged?visionReader:true,installed:installedInfo(status.installed),hardware:status.hardware,error:null,install:status.install,external:status.running??null,...(packaged?{packaged:true,installDir:status.installDir,engine:status.engine,installerError:status.installerError}:{})};lastRead=Date.now();if(status.install?.running&&![...jobs.values()].some(j=>j.state==='running'))begin('install',j=>watchInstall(j,status.install));}catch(error){snapshot={...snapshot,available:false,error:error.message};lastRead=Date.now();}emit();return state();})().finally(()=>{refreshing=null;});const run=refreshing;if(!force&&snapshot.available){run.catch(()=>{});return state();}return run;
+  }
+  function configure({repository}){if(packaged){if(instances.size||[...jobs.values()].some(j=>j.state==='running'))throw new Error('Unload models and finish operations before changing the installation.');const next=realpathSync(String(repository));if(!statSync(next).isDirectory())throw new Error('Choose the folder that holds your Strata model configurations.');preferences={...preferences,installDir:next};packagedInstall=null;disconnect();writeFileSync(settingsPath,JSON.stringify(preferences,null,2),{mode:0o600});lastRead=0;return refresh(true);}if(instances.size||[...jobs.values()].some(j=>j.state==='running'))throw new Error('Unload models and finish operations before changing the installation.');const next=realpathSync(String(repository));const old=preferences;preferences={...preferences,repo:next};try{repo();}catch(e){preferences=old;throw e;}disconnect();writeFileSync(settingsPath,JSON.stringify(preferences,null,2),{mode:0o600});lastRead=0;return refresh(true);}
+  function setDownloadDirectory(input,{insideJob=false}={}){if(!insideJob&&[...jobs.values()].some(j=>j.state==='running'))throw new Error('Finish the current operation before changing the folder.');if(typeof input!=='string'||!input.trim()||/[\r\n\0]/.test(input))throw new Error('Choose a model folder.');let path;try{path=realpathSync(input.trim());}catch{throw new Error('That folder does not exist. Check the path, or that the drive is connected.');}if(!statSync(path).isDirectory())throw new Error('Choose a folder, not a file.');/* A whole drive (D:\) is not filled with models: D:\Strata is made and used. */if(isDriveRoot(path)){const own=dataFolderFromPick(path).path;makeFolder(own);path=realpathSync(own);}try{accessSync(path,constants.R_OK|constants.W_OK);}catch{throw new Error('Strata cannot write in that folder. Choose a folder you can save files in.');}preferences={...preferences,downloadDirectory:path};/* the same choice for the installer and the Terminal: the Control settings file */if(packaged)rememberDataFolder(controlSettingsFile(),path,Date.now()/1000,true);writeFileSync(settingsPath,JSON.stringify(preferences,null,2),{mode:0o600});shareDataFolder();emit();return state();}
+- function recordFile(model){if(!safeId(model))throw new Error('Choose an installed model.');const entry=snapshot.installed?.models?.find(i=>i.model===model);if(!entry)throw new Error('This model is not installed. Download and prepare it first.');const path=realpathSync(entry.configPath??join(repo(),entry.config));if(dirname(path)!==repo()||!/^strata-[a-z0-9_.-]+\.json$/i.test(basename(path)))throw new Error('The model configuration is outside the Strata installation.');return {entry,path};}
++ function recordFile(model){if(model===ATTACHED_ID)throw new Error('该模型使用本机Linux引擎；请维护cuda-probe/strata-service.json，Windows资源滑块不会改变它。');if(!safeId(model))throw new Error('Choose an installed model.');const entry=snapshot.installed?.models?.find(i=>i.model===model);if(!entry)throw new Error('This model is not installed. Download and prepare it first.');const path=realpathSync(entry.configPath??join(repo(),entry.config));if(dirname(path)!==repo()||!/^strata-[a-z0-9_.-]+\.json$/i.test(basename(path)))throw new Error('The model configuration is outside the Strata installation.');return {entry,path};}
+  function record(model){const {entry,path}=recordFile(model);return {entry,path,config:readJson(path)};}
+  /* The text file a power user edits by hand: where it is and what is wrong in it (run-config-check.mjs). */
+  function settingsFile(model){const {path}=recordFile(model);return {model,path,name:basename(path),...checkRunConfig(readFileSync(path,'utf8')),note:'Changes you make in the file apply the next time the model starts.'};}
+@@ -178,7 +198,7 @@
+      one in the signed feed) through Control's component updater, and shows it in the job's own progress (install.engine, install.parts,
+      one combined download total). A failed engine download keeps the model files and ends with a retry message. */
+   job.engineAbort=new AbortController();
+-  const engineStep=packaged&&typeof control.update==='function'?createEngineStep({control,signal:job.engineAbort.signal,onChange:()=>{if(job.rawResult)publish(job.rawResult);else emit();}}):null;
++  const engineStep=packaged&&!((args.family??'').includes('deepseek')&&localDeepSeekCapability())&&typeof control.update==='function'?createEngineStep({control,signal:job.engineAbort.signal,onChange:()=>{if(job.rawResult)publish(job.rawResult);else emit();}}):null;
+   const publish=r=>{job.rawResult=r;job.summary=r.summary;job.result=engineStep&&r.install?{...r,install:engineStep.merge(r.install)}:r;emit();};
+   publish(result);
+   const engineTask=engineStep?engineStep.run():null;
+@@ -203,7 +223,7 @@
+  }
+  function terminate(proc,signal='SIGTERM'){if(!proc)return;if(process.platform!=='win32'&&proc.pid){try{process.kill(-proc.pid,signal);return;}catch{}}proc.kill(signal);}
+  async function stopProcess(proc){if(!proc||proc.exitCode!=null)return;await new Promise(resolve=>{const timeout=setTimeout(()=>{terminate(proc,'SIGKILL');resolve();},8000);proc.once('exit',()=>{clearTimeout(timeout);resolve();});terminate(proc);});}
+- async function unload(id,force=false){const instance=instances.get(id);if(!instance)throw new Error('This model is no longer loaded.');if(!force&&[...jobs.values()].some(j=>j.kind==='benchmark'&&j.state==='running'&&j.instanceId===id))throw new Error('Stop the benchmark before unloading this model.');if(!force&&busy(requests().filter(r=>r.instanceId===id)))throw new Error('Finish or cancel this model’s requests first.');instance.status='unloading';if(instance.profile){try{await control.stop(instance.profile);}catch(error){if(!force){instance.status='error';instance.error=error.message;emit();throw error;}}}else await stopProcess(processes.get(id));processes.delete(id);instances.delete(id);try{unlinkSync(instance.configPath);}catch{}if(defaultId===id)defaultId=instances.keys().next().value??null;emit();return state();}
++ async function unload(id,force=false){const instance=instances.get(id);if(!instance)throw new Error('This model is no longer loaded.');if(!force&&[...jobs.values()].some(j=>j.kind==='benchmark'&&j.state==='running'&&j.instanceId===id))throw new Error('Stop the benchmark before unloading this model.');if(!force&&busy(requests().filter(r=>r.instanceId===id)))throw new Error('Finish or cancel this model’s requests first.');if(instance.attachedLinux){if(closing){instances.delete(id);return state();}await linuxAttachment.unload();return forgetLinux();}instance.status='unloading';if(instance.profile){try{await control.stop(instance.profile);}catch(error){if(!force){instance.status='error';instance.error=error.message;emit();throw error;}}}else await stopProcess(processes.get(id));processes.delete(id);instances.delete(id);try{unlinkSync(instance.configPath);}catch{}if(defaultId===id)defaultId=instances.keys().next().value??null;emit();return state();}
+  /* Delete a downloaded model: stop it first, then the installer removes the model's own files and its run config and keeps
+     whatever another installed model still uses (shared MTP draft, shared PLE shard). */
+  async function removeModel(job,args){if(!safeId(args.model))throw new Error('Choose an installed model.');
+@@ -324,7 +344,7 @@
+  /* Which drafter runs, when it is not the one that was asked for (the engine's own words, "Drafting: MTP (DFlash2 didn't fit)"): under Details of the load. */
+  async function noteDrafting(job,instance,key){let note='';try{const r=await fetcher(`http://127.0.0.1:${instance.port}/metrics`,{headers:{authorization:`Bearer ${key}`},signal:AbortSignal.timeout(2000)});if(r.ok)note=String((await r.json())?.engine?.drafting_note??'');}catch{/* a convenience */}const lines=[job.drafterNote,note].filter(Boolean);if(lines.length)job.details=[job.details,...lines].filter(Boolean).join('\n');}
+  async function loadEngine(job,args){
+-  await refresh(true);if(job.state!=='running')return;const {entry,path:configFile}=recordFile(args.model);const config=checkedSettingsConfig(readFileSync(configFile,'utf8'));if(packaged){const engine=await control.engine();if(!engine.usable)throw new Error(ENGINE_NOT_RECOGNISED+(engine.notice?` ${engine.notice}`:''));}if(!entry.ready){const error=missingFilesError(args.model,entry.missing);append(args.model,error.details[0]);throw error;}
++  await refresh(true);if(job.state!=='running')return;const {entry,path:configFile}=recordFile(args.model);let config=checkedSettingsConfig(readFileSync(configFile,'utf8'));const n1xChanged=args.n1xContext!==undefined||args.n1xDrafting!==undefined;if(n1xChanged){if(!localDeepSeekEngine(config))throw new Error('当前版本未接入 N1X 原生引擎。');config=applyN1xModelSettings(config,args,configContextLimit(config));}if(packaged){const engine=localDeepSeekEngine(config)??await control.engine();if(!engine.usable)throw new Error(ENGINE_NOT_RECOGNISED+(engine.notice?` ${engine.notice}`:''));}if(!entry.ready){const error=missingFilesError(args.model,entry.missing);append(args.model,error.details[0]);throw error;}
+   if(externalRunning().length)throw new Error('A Strata server is already running outside this UI. Stop it before loading here, or connect its API in Settings → Models.');
+   if(args.multiple&&instances.size>=8)throw new Error('Unload an instance before adding another. Up to eight native instances can run here.');
+   const {cfg,resources,visionPreferences,parallelChoice,parallelNote:chosenNote,dsNote}=buildConfig(args,config);
+@@ -344,7 +364,7 @@
+   if(!args.multiple){if(busy(requests().filter(r=>instances.has(r.instanceId))))throw new Error('Finish or cancel native requests before switching models.');for(const id of [...instances.keys()])await unload(id);}else if(matching)await unload(matching.id);
+   if(job.state!=='running')return;
+   writeFileSync(configPath,JSON.stringify(cfg,null,2),{mode:0o600});
+-  const instance={id,apiModelId,fingerprint,context:entry.context??0,aliases:cfg.aliases??[],vision:!!cfg.vision,resourceProfile:cfg.ui_resource_profile??null,model:args.model,label:friendlyModelName(snapshot.catalog,args.model)??entry.model_name??args.model,port:cfg.port,gpus:Array.isArray(cfg.gpu)?cfg.gpu:cfg.gpu===undefined?[]:[cfg.gpu],status:'loading',phase:'loading',parallel:cfg.parallel??1,mcpServers:cfg.mcp_servers??cfg.mcpServers??{},key,configPath,loadedAt:new Date().toISOString(),metrics:null,error:null};
++  const instance={id,apiModelId,fingerprint,context:Number(flagValue(cfg.args,'--max-context'))||entry.context||0,aliases:cfg.aliases??[],vision:!!cfg.vision,resourceProfile:cfg.ui_resource_profile??null,model:args.model,label:friendlyModelName(snapshot.catalog,args.model)??entry.model_name??args.model,port:cfg.port,gpus:Array.isArray(cfg.gpu)?cfg.gpu:cfg.gpu===undefined?[]:[cfg.gpu],status:'loading',phase:'loading',parallel:cfg.parallel??1,mcpServers:cfg.mcp_servers??cfg.mcpServers??{},key,configPath,loadedAt:new Date().toISOString(),metrics:null,error:null};
+   /* Another model on the same graphics card: the engine takes the card's free memory, so a second one usually finds none. Loading goes on (recommend, never force); if it fails, the reason is said. */
+   const sharedWith=instance.gpus.length?[...instances.values()].find(i=>i.id!==id&&i.status!=='error'&&i.model!==args.model&&i.gpus.some(g=>instance.gpus.includes(g))):null;
+   const sharedSentence=sharedWith?`GPU ${instance.gpus.find(g=>sharedWith.gpus.includes(g))+1} is already used by ${sharedWith.label}, so this model did not fit there. Load it on another GPU, or unload ${sharedWith.label} first.`:null;
+@@ -391,7 +411,7 @@
+   }
+   const deadline=Date.now()+300000;while(Date.now()<deadline&&job.state==='running'){
+    if(instance.status==='error')throw new Error(instance.error);
+-   try{const response=await fetcher(`http://127.0.0.1:${instance.port}/health`,{headers:{authorization:`Bearer ${key}`},signal:AbortSignal.timeout(2000)});if(job.state!=='running'){await unload(id);return;}if(response.ok){instance.status='ready';instance.phase='idle';await noteDrafting(job,instance,key);if(resources||args.vision!==undefined||JSON.stringify(cfg[USER_KEY]??null)!==JSON.stringify(config[USER_KEY]??null))writeModelConfig(record(args.model).path,{...config,...(resources?{...resources,ui_resource_profile:args.resourceProfile}:{}),...visionPreferences,...(cfg[USER_KEY]?{[USER_KEY]:cfg[USER_KEY]}:{})});emit();ensurePoll();instance.parallelNote=parallelNote;return {summary:retried?`${instance.label} is ready, after a second try: ${retried.words}`:`${instance.label} is ready.${parallelNote?' '+parallelNote:''}`,instanceId:id};}}catch{}
++   try{const response=await fetcher(`http://127.0.0.1:${instance.port}/health`,{headers:{authorization:`Bearer ${key}`},signal:AbortSignal.timeout(2000)});if(job.state!=='running'){await unload(id);return;}if(response.ok){instance.status='ready';instance.phase='idle';await noteDrafting(job,instance,key);if(n1xChanged||resources||args.vision!==undefined||JSON.stringify(cfg[USER_KEY]??null)!==JSON.stringify(config[USER_KEY]??null))writeModelConfig(record(args.model).path,{...config,...(resources?{...resources,ui_resource_profile:args.resourceProfile}:{}),...visionPreferences,...(cfg[USER_KEY]?{[USER_KEY]:cfg[USER_KEY]}:{})});emit();ensurePoll();instance.parallelNote=parallelNote;return {summary:retried?`${instance.label} is ready, after a second try: ${retried.words}`:`${instance.label} is ready.${parallelNote?' '+parallelNote:''}`,instanceId:id};}}catch{}
+    await new Promise(resolve=>setTimeout(resolve,1200));
+   }
+   if(job.state!=='running'){await unload(id);return;}
+@@ -401,7 +421,7 @@
+  let pollCount=0;
+  /* The engine's metrics carry every finished request with `?requests=all`: a long session makes that a large JSON that the host parses and
+     pushes to the window every 2 s. The last dozen is what the app shows live; the full list is refreshed every tenth poll. */
+- async function poll(){if(polling||closing)return;polling=true;const full=pollCount++%10===0;try{await Promise.all([...instances.values()].map(async instance=>{if(instance.status!=='ready')return;try{const response=await fetcher(`http://127.0.0.1:${instance.port}/metrics${full?'?requests=all':''}`,{headers:{authorization:`Bearer ${instance.key}`},signal:AbortSignal.timeout(1500)});if(!response.ok)throw new Error('Metrics unavailable');const fresh=await response.json();const older=instance.metrics?.requests,recent=fresh.requests;instance.metrics=full||!Array.isArray(older)||!Array.isArray(recent)||!recent.length?fresh:{...fresh,requests:[...recent,...older.filter(r=>Number(r.time)<Math.min(...recent.map(x=>Number(x.time))))]};const tools=await fetcher(`http://127.0.0.1:${instance.port}/mcp`,{headers:{authorization:`Bearer ${instance.key}`},signal:AbortSignal.timeout(1500)});if(tools.ok)instance.metrics.mcp=await tools.json();instance.phase=instance.metrics.live?.state??'idle';}catch{instance.metrics=null;instance.phase='unavailable';}}));emit();}finally{polling=false;}}
++ async function poll(){if(polling||closing)return;polling=true;const full=pollCount++%10===0;try{await Promise.all([...instances.values()].map(async instance=>{if(instance.attachedLinux){try{const live=await linuxAttachment.instance();if(!live){instances.delete(instance.id);if(defaultId===instance.id)defaultId=null;return;}Object.assign(instance,live);delete instance.error;}catch(error){instance.status='error';instance.phase='unavailable';instance.error=error.message;instance.metrics=null;}return;}if(instance.status!=='ready')return;try{const response=await fetcher(`http://127.0.0.1:${instance.port}/metrics${full?'?requests=all':''}`,{headers:{authorization:`Bearer ${instance.key}`},signal:AbortSignal.timeout(1500)});if(!response.ok)throw new Error('Metrics unavailable');const fresh=await response.json();const older=instance.metrics?.requests,recent=fresh.requests;instance.metrics=full||!Array.isArray(older)||!Array.isArray(recent)||!recent.length?fresh:{...fresh,requests:[...recent,...older.filter(r=>Number(r.time)<Math.min(...recent.map(x=>Number(x.time))))]};const tools=await fetcher(`http://127.0.0.1:${instance.port}/mcp`,{headers:{authorization:`Bearer ${instance.key}`},signal:AbortSignal.timeout(1500)});if(tools.ok)instance.metrics.mcp=await tools.json();instance.phase=instance.metrics.live?.state??'idle';}catch{instance.metrics=null;instance.phase='unavailable';}}));emit();}finally{polling=false;}}
+  function ensurePoll(){if(!timer){timer=setInterval(()=>void poll(),2000);timer.unref?.();}void poll();}
+  async function benchmark(job,args){const instance=resolveInstance(args.instanceId);job.instanceId=instance.id;if(busy(requests().filter(r=>r.instanceId===instance.id)))throw new Error('Wait for this model to finish before benchmarking.');const started=Date.now();job.abort=new AbortController();const response=await fetcher(`http://127.0.0.1:${instance.port}/v1/chat/completions`,{method:'POST',headers:{'content-type':'application/json',authorization:`Bearer ${instance.key}`},signal:AbortSignal.any([job.abort.signal,AbortSignal.timeout(180000)]),body:JSON.stringify({model:instance.apiModelId,messages:[{role:'user',content:'Explain how a rainbow forms in clear, simple language.'}],temperature:0,reasoning_effort:'none',max_tokens:200,stream:false})});const body=await response.json();if(!response.ok)throw new Error(body.error?.message??'Benchmark failed.');if(job.state!=='running')return;const result={summary:'Measured benchmark complete.',at:new Date().toISOString(),model:instance.apiModelId,durationMs:Date.now()-started,tokensIn:body.usage?.prompt_tokens??null,tokensOut:body.usage?.completion_tokens??null,outputTps:body.timings?.predicted_per_second??null,promptTps:body.timings?.prompt_per_second??null,source:'engine',settings:'Greedy · thinking off · up to 200 output tokens'};writeFileSync(join(directory,'native-benchmark.json'),JSON.stringify(result,null,2),{mode:0o600});return result;}
+  function resolveInstance(id){const aliases=[...instances.values()].filter(i=>i.aliases?.includes(id));if(aliases.length>1&&!instances.has(id)&&![...instances.values()].some(i=>i.apiModelId===id))throw new Error('This alias matches more than one instance. Choose its exact model ID.');const i=instances.get(id)??[...instances.values()].find(i=>i.apiModelId===id)??aliases[0]??(!id&&instances.size===1?[...instances.values()][0]:undefined);if(!i)throw new Error('Choose a loaded model ID.');if(i.status!=='ready')throw new Error('This model is not ready.');return i;}
+@@ -481,7 +501,7 @@
+  async function tuneOff(args){await refresh();const {path}=tuneConfig(args);return autotuner.off(path);}
+  async function autotune(job,args){
+   await refresh(true);if(job.state!=='running')return;
+-  if(packaged){const engine=await control.engine();if(!engine.usable)throw new Error(ENGINE_NOT_RECOGNISED+(engine.notice?` ${engine.notice}`:''));}
++  if(packaged){const engine=localDeepSeekEngine(config)??await control.engine();if(!engine.usable)throw new Error(ENGINE_NOT_RECOGNISED+(engine.notice?` ${engine.notice}`:''));}
+   const {path}=tuneConfig(args);
+   if(externalRunning().length)throw new Error('Stop the native server running outside this UI before tuning.');
+   if(busy(requests().filter(r=>instances.has(r.instanceId))))throw new Error('Finish requests before tuning.');
+@@ -591,5 +611,5 @@
+  // Remove nonserializable process references from public jobs.
+  const publicState=()=>{const value=state();value.jobs=value.jobs.map(({process,engineAbort,rawResult,...job})=>job);return value;};
+  async function localPreview(path){if(!packaged)throw new Error('Checking local model files is part of the Strata app.');if(typeof path!=='string'||!path.trim()||[...path].some(c=>c.charCodeAt(0)<32))throw new Error('Choose a folder.');return control.importPlan(path.trim());}
+- return {state:publicState,tuneStatus,tuneEffective,tuneOff,tunePresets:{list:()=>autotuner.list(),action:(kind,id,extra)=>autotuner.action(kind,id,extra),undoFor:async args=>autotuner.undoFor(tuneConfig(args).path)},refresh,localPreview,configure,setDownloadDirectory,planModelsFolder,startModelsFolder,interruptedMove,finishInterruptedMove,leaveInterruptedMove,plan,settings,save,settingsFile,openSettingsFile,operation,cancel,unload,resolveInstance,poll,logs:()=>logs.slice(),benchmarkReport:()=>readJson(join(directory,'native-benchmark.json'),null),setDefault(id){defaultId=resolveInstance(id).id;emit();return publicState();},hasLive:()=>[...instances.values()].some(i=>i.status==='ready'),readyInstances:()=>[...instances.values()].filter(i=>i.status==='ready'),defaultInstanceId:()=>defaultId,close};
++ return {state:publicState,attachLinux,tuneStatus,tuneEffective,tuneOff,tunePresets:{list:()=>autotuner.list(),action:(kind,id,extra)=>autotuner.action(kind,id,extra),undoFor:async args=>autotuner.undoFor(tuneConfig(args).path)},refresh,localPreview,configure,setDownloadDirectory,planModelsFolder,startModelsFolder,interruptedMove,finishInterruptedMove,leaveInterruptedMove,plan,settings,save,settingsFile,openSettingsFile,operation,cancel,unload,resolveInstance,poll,logs:()=>logs.slice(),benchmarkReport:()=>readJson(join(directory,'native-benchmark.json'),null),setDefault(id){defaultId=resolveInstance(id).id;emit();return publicState();},hasLive:()=>[...instances.values()].some(i=>i.status==='ready'),readyInstances:()=>[...instances.values()].filter(i=>i.status==='ready'),defaultInstanceId:()=>defaultId,close};
+ }
+--- a/apps/host/src/app/Sidebar.tsx
++++ b/apps/host/src/app/Sidebar.tsx
+@@ -72,7 +72,7 @@
+     function closeMenu() { setMenuId(null); menuTrigger.current?.focus(); }
+     return <>
+     <aside className="nav" ref={containerRef} aria-label={tr("Main navigation")} aria-modal={navOpen && compact ? true : undefined} role={navOpen && compact ? 'dialog' : undefined} tabIndex={-1}>
+-      <div className="nav__top">{tr(!collapsed ? <a className="nav__brand" href={href('chat')} aria-label={tr("Strata — open chat")}><Brand variant="lockup" height={28} decorative className="nav__brand-lockup"/></a> : null)}<button type="button" className="nav__collapse" aria-label={tr(collapsed ? 'Show sidebar' : 'Hide sidebar')} title={tr(collapsed ? 'Show sidebar' : 'Hide sidebar')} onClick={() => compact ? setNavOpen(!navOpen) : toggleRail()}><Icon name="panel" size={20}/></button></div>
++      <div className="nav__top">{tr(!collapsed ? <a className="nav__brand" href={href('chat')} aria-label="Strata_Zackyzq — 打开聊天"><Brand variant="lockup" height={28} decorative className="nav__brand-lockup"/></a> : null)}<button type="button" className="nav__collapse" aria-label={tr(collapsed ? 'Show sidebar' : 'Hide sidebar')} title={tr(collapsed ? 'Show sidebar' : 'Hide sidebar')} onClick={() => compact ? setNavOpen(!navOpen) : toggleRail()}><Icon name="panel" size={20}/></button></div>
+       <div className="nav__scroll">
+         <button className="st-btn st-btn--primary nav-new" aria-label={tr("New chat")} title={tr("New chat")} onClick={() => runCommand('new')}><Icon name="new-chat" size={18}/><span className="nav__rail-hide">{tr("New chat")}</span></button>
+         <TaskTree collapsed={collapsed}/>
+--- a/apps/host/src/components/Brand.tsx
++++ b/apps/host/src/components/Brand.tsx
+@@ -1,24 +1,8 @@
+-import { tr } from '../lib/i18n';
+-/** The approved three-bar mark and outlined wordmark, sized as artwork. */
+-import { useEffect, useState, type CSSProperties } from 'react';
+-import { useMedia } from '../lib/responsive';
+-import { useStore } from '../lib/store';
+-export function Brand({ variant, height, decorative = false, className = '', }: {
+-    variant: 'mark' | 'lockup';
+-    height: number;
+-    decorative?: boolean;
+-    className?: string;
+-}) {
+-    const preference = useStore(s => s.theme);
+-    const systemDark = useMedia('(prefers-color-scheme: dark)');
+-    const theme = preference === 'system' ? (systemDark ? 'dark' : 'light') : preference;
+-    const src = `/brand/strata-${variant}-${theme}.svg`;
+-    const [failed, setFailed] = useState(false);
+-    useEffect(() => setFailed(false), [src]);
+-    const width = variant === 'mark' ? height : height * 182 / 48;
+-    const style = { width, height } satisfies CSSProperties;
+-    return <span className={`brand brand--${variant} ${className}`} style={style} role={decorative ? undefined : 'img'} aria-label={tr(decorative ? undefined : 'Strata')} aria-hidden={decorative || undefined}>
+-    {tr(!failed ? <img className="brand__img" src={src} width={width} height={height} alt={tr("")} onError={() => setFailed(true)}/> : null)}
+-    <span className="brand__fallback" aria-hidden="true">{tr(variant === 'mark' ? 'S' : 'Strata')}</span>
+-  </span>;
+-}
++import { useState } from 'react';
++/** Personal branding stays in local user data, never in the release payload. */
++export function Brand({ variant, height, decorative = false, className = '' }: {
++ variant: 'mark' | 'lockup'; height: number; decorative?: boolean; className?: string;
++}) { const [custom, setCustom] = useState(true); return <span className={`brand ${variant === 'lockup' ? 'zack-brand' : 'brand--mark'} ${className}`}
++ role={decorative ? undefined : 'img'} aria-label={decorative ? undefined : 'strata_Zackyzq'} aria-hidden={decorative || undefined}>
++ {custom ? <img src="/api/branding/avatar" width={height} height={height} style={{borderRadius:'22%',objectFit:'contain'}} alt="" onError={()=>setCustom(false)}/> : <svg width={height} height={height} viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#dbeafe"/><path d="M9 10h14L9 22h14" fill="none" stroke="#2563eb" strokeWidth="3" strokeLinejoin="round"/></svg>}
++ {variant === 'lockup' && <strong>strata_Zackyzq</strong>}</span>; }
+--- a/apps/host/src/components/EngineFirstRun.tsx
++++ b/apps/host/src/components/EngineFirstRun.tsx
+@@ -29,8 +29,9 @@
+     const [needed, setNeeded] = useState<boolean | null>(null);
+     useEffect(() => {
+         let live = true;
+-        const ask = () => api.get<{ engine?: { usable?: boolean } | null; engineSetup?: boolean }>('/api/control/status').then(s => {
++        const ask = () => api.get<{ engine?: { usable?: boolean } | null; engineSetup?: boolean; nativeEngines?: {deepseek41?: {usable?: boolean}} }>('/api/control/status').then(s => {
+             if (!live) return;
++            if (s.nativeEngines?.deepseek41?.usable) return setNeeded(false);
+             if (s.engineSetup) return setNeeded(null);
+             setNeeded(!!s.engine && s.engine.usable === false);
+         }, () => { if (live) setNeeded(false); });
+--- a/apps/host/src/components/NativeModels.tsx
++++ b/apps/host/src/components/NativeModels.tsx
+@@ -3,6 +3,7 @@
+ import { Screen } from './layout';
+ import { VersionPicker } from './VersionPicker';
+ import { FamilySwitch } from './FamilySwitch';
++import { N1xRuntimeCard } from './N1xRuntimeCard';
+ import { PcFitCard } from './PcFitCard';
+ import { fitOn, memoryNeeded } from '../lib/native-fit';
+ import { GpuRoles } from './GpuRoles';
+@@ -39,25 +40,32 @@
+ }) {
+     const native = useNative(), imageLibrary = useStore(s => s.imageModels), hardware = useStore(s => s.hardware);
+     // The choices are kept while the page is closed (Models -> Monitor -> Models used to start them over and a person lost track of what was downloading).
+-    const [family, setFamily] = useKept('models.family', ''), [size, setSize] = useKept('models.size', ''), [context, setContext] = useKept('models.context', 32768), [vision, setVision] = useKept('models.vision', 'yes');
++    const [family, setFamily] = useKept('models.family', ''), [size, setSize] = useKept('models.size', ''), [selectedContext, setContext] = useKept('models.context', 32768), [vision, setVision] = useKept('models.vision', 'yes');
+     const manual = useStore(s => s.setup?.choices?.onboarding?.manual ?? false);
+     const [expert, setExpert] = useKept('models.expert', manual), [multiple, setMultiple] = useKept('models.multiple', false), [roles, setRoles] = useKept<Roles | null>('models.roles', null), [kv, setKv] = useKept('models.kv', 'int8'), [lowRam, setLowRam] = useKept('models.lowRam', 'auto'), [split, setSplit] = useKept('models.split', 'auto');
+     const [resourceProfile, setResourceProfile] = useKept<'work' | 'performance'>('models.profile', 'work');
+-    const [drafting, setDrafting] = useState('auto');
++    const [selectedDrafting, setDrafting] = useState('auto');
+     const [pending, setPending] = useState(false), [error, setError] = useState(''), [plan, setPlan] = useState<Record<string, any> | null>(null), [loadedError, setLoadedError] = useState(''), [tuneOpen, setTuneOpen] = useState(false), [jobId, setJobId] = useKept('models.job', ''), [manage, setManage] = useState(false);
+     const [toastedJob, setToastedJob] = useKept('models.toasted', ''), [appliedSig, setAppliedSig] = useKept('models.applied', '');
+     const presetPending = useRef(false);
+     const [deleting, setDeleting] = useState<string | null>(null);
+-    const families = nativeCatalogModels(native?.catalog?.families ?? []);
++    const isN1x = !!native?.hardware?.gpus.some(g => /N1X/i.test(g.name));
++    const families = nativeCatalogModels(native?.catalog?.families ?? []).map(f => isN1x && f.family === 'deepseek41' ? {...f, title: 'DeepSeek-V4.1-Flash · 1017'} : f);
+     const expertSection = useRef<HTMLElement>(null);
+     useEffect(() => { if (expert)
+         expertSection.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, [expert]);
+     const selectedFamily = families.find(f => f.family === family || f.sizes.some(size => size.sourceFamily === family)) ?? families[0], selectedSize = selectedFamily?.sizes.find(s => s.id === size) ?? selectedFamily?.sizes[0];
+     const installed = native?.installed?.models.find(m => m.model === selectedSize?.id);
++    const n1xDeepseek = isN1x && selectedFamily?.family === 'deepseek41';
++    // N1X DeepSeek 的桌面策略：固定最大上下文及自动生成加速；其他设备保留用户选择。
++    const context = n1xDeepseek ? 1048576 : selectedContext;
++    const drafting = n1xDeepseek ? 'auto' : selectedDrafting;
++    const localEngine = (installed as typeof installed & {localEngine?:{usable:boolean;notice:string}})?.localEngine;
++    const familyEngine = n1xDeepseek ? native?.localEngines?.deepseek41 ?? native?.installed?.models.map(m => (m as typeof m & {localEngine?:{usable:boolean;notice:string}}).localEngine).find(e => e?.usable) : null;
+     // The model that is running is shown as running, with Unload: not offered for loading again.
+     const downloaded = native?.installed?.models ?? [], allSizes = families.flatMap(f => f.sizes);
+     // This computer for the fit figures: the biggest usable graphics card, or the ones chosen under Expert settings.
+-    const engineVendor = native?.hardware?.engine_vendor ?? null, roleCards: RoleCard[] = roleRows(native?.hardware?.gpus as RoleCard[] | undefined, engineVendor);
++    const engineVendor = native?.hardware?.engine_vendor ?? null, roleCards: RoleCard[] = roleRows(native?.hardware?.gpus as RoleCard[] | undefined, engineVendor).filter(g => !n1xDeepseek || !/NPU/i.test(g.name));
+     const pcGpus = (native?.hardware?.gpus ?? []).filter(g => g.usable !== false), pcGpu = [...pcGpus].sort((x, y) => y.vram_gb - x.vram_gb)[0] ?? null;
+     const pcRam = native?.hardware?.ram_gb || hardware?.memory.totalGb || null, pcVram = pcGpu?.vram_gb ?? 0;
+     // What the models that stay loaded (Run multiple models) already take: the fit figures are for what is left.
+@@ -108,14 +116,14 @@
+     // A layer split written for another number of cards no longer fits: back to automatic.
+     useEffect(() => { if (cardsGpus.length <= 1 && split !== 'auto') setSplit('auto'); }, [cardsGpus.length]);
+     // Drafting (which drafter guesses ahead): DFlash2 is for Qwen3.8-Flash-Next only (the qwen and gyro families), so no other model is offered it.
+-    const draftingChoices = selectedSize ? draftingOptions(selectedSize.sourceFamily ?? selectedFamily?.family, native?.capabilities?.dflash2) : null;
+-    const draftingWords: Record<string, string> = { auto: 'Auto (recommended)', mtp: 'MTP', dflash2: 'DFlash2', off: 'Off' };
++    const draftingChoices = n1xDeepseek ? ['auto','on','off'] : selectedSize ? draftingOptions(selectedSize.sourceFamily ?? selectedFamily?.family, native?.capabilities?.dflash2) : null;
++    const draftingWords: Record<string, string> = { on: 'DSpark 开启', auto: n1xDeepseek ? 'DSpark 自动' : 'Auto (recommended)', mtp: 'MTP', dflash2: 'DFlash2', off: 'Off' };
+     const values = useMemo(() => ({ family: selectedSize?.sourceFamily, model: selectedSize?.model, context, vision: selectedSize?.images ? vision : 'no', kv, low_ram: lowRam, resourceProfile, ...(cardsGpus.length > 1 ? { gpus: cardsGpus.join(',') } : cardsGpus.length === 1 ? { gpu: cardsGpus[0] } : {}), loadAfter: true, multiple: expert && multiple }), [selectedSize?.sourceFamily, selectedSize?.model, context, vision, kv, lowRam, resourceProfile, cardsGpus.join(','), expert, multiple]);
+     const downloadValues = { ...values, ...(draftingChoices ? { drafting } : {}), vision: selectedSize?.images && vision !== 'no' ? 'yes' : 'no', loadVision: selectedSize?.images ? vision : 'no' };
+     useEffect(() => { if (!native?.catalog || family)
+-        return; const current = native.instances.find(i => i.id === native.defaultId); const rec = native.catalog.recommendation ?? { family: null, model: null }; const loadedFamily = families.find(f => f.sizes.some(s => s.id === current?.model)); const have = new Set((native.installed?.models ?? []).filter(m => m.ready).map(m => m.model)); const installedFamily = families.find(f => f.sizes.some(s => have.has(s.id))); const f = loadedFamily ?? installedFamily ?? families.find(f => f.family === rec.family || f.sizes.some(s => s.sourceFamily === rec.family)) ?? families[0]; if (f) {
++        return; const current = native.instances.find(i => i.id === native.defaultId); const rec = native.catalog.recommendation ?? { family: null, model: null }; const loadedFamily = families.find(f => f.sizes.some(s => s.id === current?.model)); const have = new Set((native.installed?.models ?? []).filter(m => m.ready).map(m => m.model)); const installedFamily = families.find(f => f.sizes.some(s => have.has(s.id))); const f = loadedFamily ?? installedFamily ?? (isN1x && native.localEngines?.deepseek41?.usable ? families.find(f => f.family === 'deepseek41') : undefined) ?? families.find(f => f.family === rec.family || f.sizes.some(s => s.sourceFamily === rec.family)) ?? families[0]; if (f) {
+         setFamily(f.family);
+-        setSize(f.sizes.find(s => s.id === current?.model)?.id ?? f.sizes.find(s => have.has(s.id))?.id ?? f.sizes.find(s => s.model === rec.model)?.id ?? f.sizes[0]?.id ?? '');
++        setSize(f.sizes.find(s => s.id === current?.model)?.id ?? f.sizes.find(s => have.has(s.id))?.id ?? (isN1x && f.family === 'deepseek41' ? f.sizes.find(s => s.model === 'IST-DAS-2.25bpw')?.id : undefined) ?? f.sizes.find(s => s.model === rec.model)?.id ?? f.sizes[0]?.id ?? '');
+         setContext(('context' in rec ? rec.context : undefined) ?? 32768);
+     } }, [native?.catalog]);
+     // The version that is selected: a model already on this PC shows the settings it was prepared with (so loading it never asks to download);
+@@ -147,7 +155,7 @@
+         else {
+             setVision('yes');
+             if (selectedSize.multi_file)
+-                setContext(8192);      // DeepSeek runs at the one context its engine was checked at (as in the guided setup)
++                setContext(8192);      // 未准备版本沿用官方初始值；不是当前运行实例的上下文。
+         }
+     }, [selectedSize?.id, installed?.model, installed?.ready, installed?.context, installed?.kv, installed?.images, installed?.visionEnabled, installed?.visionDevice, installed?.lowRamMode, installed?.resourceProfile]);
+     useEffect(() => { if (jobId && job?.state === 'done' && job.id !== toastedJob && (job.kind === 'load' || job.kind === 'install')) {
+@@ -165,7 +173,7 @@
+         setPending(false);
+     } }
+     async function load() { if (!selectedSize)
+-        return; await perform(async () => { if (installed?.ready && context === installed.context && (!selectedSize?.images || vision === 'no' || installed.images && installed.images !== 'off') && (!installed.kv || kv === installed.kv || kv === tunedNow?.fields.kv) && (lowRam === (installed.lowRamMode ?? 'auto') || lowRam === tunedNow?.fields.lowRam)) {
++        return; if(localEngine?.usable && installed?.ready){await perform(async()=>{const result=await nativeAction<NativeJob>('operations',{kind:'load',args:{model:selectedSize.id,n1xContext:context,n1xDrafting:drafting,multiple:false,vision:'no'}});setJobId(result.id);});return;} await perform(async () => { if (installed?.ready && context === installed.context && (!selectedSize?.images || vision === 'no' || installed.images && installed.images !== 'off') && (!installed.kv || kv === installed.kv || kv === tunedNow?.fields.kv) && (lowRam === (installed.lowRamMode ?? 'auto') || lowRam === tunedNow?.fields.lowRam)) {
+         const result = await nativeAction<NativeJob>('operations', { kind: 'load', args: { model: selectedSize.id, resourceProfile, vision: selectedSize?.images ? vision : 'no', multiple: expert && multiple, ...(draftingChoices ? { values: { drafting } } : {}), ...(roleCards.length > 1 ? (roles && customRoles ? { gpuRoles: effectiveRoles, layerSplit: expert && cardsGpus.length > 1 ? split : 'auto' } : cardsGpus.length ? { gpus: cardsGpus, gpusFromRecommendation: true, layerSplit: expert && cardsGpus.length > 1 ? split : 'auto' } : {}) : {}) } });
+         setJobId(result.id);
+     }
+@@ -188,33 +196,39 @@
+     {tr(native?.instances.length && expert ? <section className="st-card native-running"><h2 className="h4">{tr(native.instances.length === 1 ? 'Loaded model' : 'Loaded models')}</h2>{tr(native.instances.map(i => <div key={i.id}><span><strong>{tr(i.label)}</strong><small>{tr(i.gpus.length ? i.gpus.map((g, n) => `GPU ${g + 1}${i.gpus.length > 1 && n === i.gpus.length - 1 ? ' (Main)' : ''}`).join(' + ') : 'Automatic GPU')} · {tr(i.status === 'ready' ? i.phase : i.status)}{tr(native.defaultId === i.id ? ' · Chat default' : '')}</small>{tr(i.error ? <small className="inline-error">{tr(plainFailureText(i.error).message)}</small> : null)}</span>{tr(expert && multiple && native.defaultId !== i.id ? <Btn size="sm" variant="ghost" onClick={() => void loadedAction(`instances/${i.id}/default`)}>{tr("Use in chat")}</Btn> : null)}<Btn size="sm" disabled={pending || !!active} onClick={() => void loadedAction(`instances/${i.id}/unload`)}>{tr("Unload")}</Btn></div>))}{tr(loadedError ? <ErrorNotice message={loadedError} next={tr("Stop or answer the chat that is still using this model, then try again.")}/> : null)}</section> : null)}
+     <section className="st-card native-choice">{tr(selectedFamily && (!selectedSize || selectedSize.needsNewerEngine) ? <><h2 className="h3">{tr("This model needs a newer engine.")}</h2><p className="small muted">{tr("Update your engine or import a local GGUF for this model.")}</p><Btn onClick={() => { setSettingsSection('Engine'); go('settings'); }}>{tr("Update engine")}</Btn><Btn variant="ghost" onClick={onImport ?? onOtherModels}>{tr("Use a local GGUF\u2026")}</Btn></> : null)}{tr(!selectedFamily ? <><h2 className="h3">{tr("Set up Strata")}</h2><p className="small muted">{tr("Connect your local installation to choose an optimized model.")}</p><Btn variant="primary" onClick={onConnectEngine ?? (() => { setSettingsSection('Engine'); go('settings'); })}>{tr("Connect engine")}</Btn>{tr(native?.error ? <p className="small inline-error">{tr(native.error)}</p> : null)}<Btn variant="ghost" onClick={onOtherModels}>{tr("Other local models")}</Btn></> : null)}
+      {tr(selectedSize ? <>
+-      <div className="native-choice__head"><span className="native-choice__label">{tr("Version")}</span><span className="native-choice__tools"><NativePresets values={values} onApply={v => { const f = families.find(f => f.family === v.family || f.sizes.some(s => s.sourceFamily === v.family)); if (!f)
+-        return; presetPending.current = true; setFamily(f.family); setSize(f.sizes.find(s => s.model === v.model && (s.sourceFamily === v.family || f.family === v.family))?.id ?? ''); setContext(v.context ?? 32768); setVision(v.vision ?? 'no'); setKv(v.kv ?? 'int8'); setLowRam(v.low_ram ?? 'auto'); }}/><Btn icon="models" onClick={() => setManage(true)}>{tr("Manage models")}</Btn></span></div>
+-      <div className="native-version"><VersionPicker pick={native?.catalog?.recommendation} versions={allSizes} selectedId={selectedSize.id} hardware={fitHardware} downloaded={readyIds} onSelect={id => { const f = families.find(f => f.sizes.some(s => s.id === id)); if (f) { setFamily(f.family); setSize(id); setError(''); } }} onOwnGguf={() => (onImport ?? onOtherModels)()}/></div>
++      <div className="native-choice__head"><span className="native-choice__label">{tr("Version")}</span><span className="native-choice__tools"><NativePresets values={{...values, ...(draftingChoices ? {drafting} : {})}} onApply={v => { const f = families.find(f => f.family === v.family || f.sizes.some(s => s.sourceFamily === v.family)); if (!f)
++        return; presetPending.current = true; setFamily(f.family); setSize(f.sizes.find(s => s.model === v.model && (s.sourceFamily === v.family || f.family === v.family))?.id ?? ''); setContext(v.context ?? 32768); setVision(v.vision ?? 'no'); setKv(v.kv ?? 'int8'); setLowRam(v.low_ram ?? 'auto'); if(draftingChoices?.includes(v.drafting)) setDrafting(v.drafting); }}/><Btn icon="models" onClick={() => setManage(true)}>{tr("Manage models")}</Btn></span></div>
++      <div className="native-version"><VersionPicker suppressFit={n1xDeepseek} pick={native?.catalog?.recommendation} versions={n1xDeepseek ? selectedFamily.sizes : allSizes} selectedId={selectedSize.id} hardware={fitHardware} downloaded={readyIds} onSelect={id => { const f = families.find(f => f.sizes.some(s => s.id === id)); if (f) { setFamily(f.family); setSize(id); setError(''); } }} onOwnGguf={() => (onImport ?? onOtherModels)()}/></div>
+       {tr(noFit ? <p className="small muted native-spill-note"><Icon name="disk" size={16}/>{tr("May run slower \u00B7 Model data can be read from SSD.")}</p> : null)}
+       {tr(selectedSize?.multi_file && deepseekContextNote(context) ? <p className="small muted native-spill-note"><Icon name="info" size={16}/>{tr(deepseekContextNote(context))}</p> : null)}
+-      <div className="native-choice__row">
+-       <div className="native-choice__col"><span className="native-choice__label">{tr("Conversation context")}</span><Select ariaLabel={tr("Conversation context")} value={String(context)} options={contextChoices(selectedSize?.multi_file ? deepseekContexts(installed?.contextMax) : native?.catalog?.contexts ?? [8192, 32768, 65536, 131072, 262144], context).map(n => ({ value: String(n), label: n % 1024 === 0 ? `${n / 1024}K` : `${n.toLocaleString()} tokens` }))} onChange={n => setContext(Number(n))}/></div>
+-       {tr(draftingChoices ? <div className="native-choice__col"><span className="native-choice__label">{tr("Drafting")}</span><Select ariaLabel={tr("Drafting")} value={drafting} disabled={!!active} options={draftingChoices.map(v => ({ value: v, label: tr(draftingWords[v]) }))} onChange={v => setDrafting(String(v))}/></div> : null)}
+-       <div className="native-choice__col"><span className="native-choice__label">{tr("Computer use")}</span><div className="native-resource-choice"><button aria-pressed={resourceProfile === 'work'} data-selected={resourceProfile === 'work'} onClick={() => setResourceProfile('work')}><Icon name="computer" size={20}/><span><strong>{tr("Leave 20% for my work")}</strong><small>{tr("Headroom for your other apps")}</small></span>{tr(resourceProfile === 'work' ? <Icon name="check" size={15}/> : null)}</button><button aria-pressed={resourceProfile === 'performance'} data-selected={resourceProfile === 'performance'} onClick={() => setResourceProfile('performance')}><Icon name="bolt" size={20}/><span><strong>{tr("Full performance")}</strong><small>{tr("Give Strata priority")}</small></span>{tr(resourceProfile === 'performance' ? <Icon name="check" size={15}/> : null)}</button></div></div>
++
++      <div className={`native-choice__row${n1xDeepseek ? " native-choice__row--n1x-fixed" : ""}`}>
++       <div className="native-choice__col"><span className="native-choice__label">{tr("Conversation context")}</span>{n1xDeepseek ? <div className="native-fixed-value" aria-label="对话上下文：1024K 最大配置">1024K · 最大配置</div> : <Select ariaLabel={tr("Conversation context")} value={String(context)} options={contextChoices(selectedSize?.multi_file ? deepseekContexts(installed?.contextMax) : native?.catalog?.contexts ?? [8192, 32768, 65536, 131072, 262144], context).map(n => ({ value: String(n), label: n % 1024 === 0 ? `${n / 1024}K` : `${n.toLocaleString()} tokens` }))} onChange={n => setContext(Number(n))}/>}</div>
++       {tr(draftingChoices ? <div className="native-choice__col"><span className="native-choice__label">{n1xDeepseek ? "生成加速" : tr("Drafting")}</span>{n1xDeepseek ? <div className="native-fixed-value" aria-label="生成加速：自动 DSpark">自动（DSpark）</div> : <Select ariaLabel={tr("Drafting")} value={drafting} disabled={!!active} options={draftingChoices.map(v => ({ value: v, label: tr(draftingWords[v]) }))} onChange={v => setDrafting(String(v))}/>}</div> : null)}
++       {!n1xDeepseek ? <div className="native-choice__col"><span className="native-choice__label">{tr("Computer use")}</span><div className="native-resource-choice"><button aria-pressed={resourceProfile === 'work'} data-selected={resourceProfile === 'work'} onClick={() => setResourceProfile('work')}><Icon name="computer" size={20}/><span><strong>{tr("Leave 20% for my work")}</strong><small>{tr("Headroom for your other apps")}</small></span>{tr(resourceProfile === 'work' ? <Icon name="check" size={15}/> : null)}</button><button aria-pressed={resourceProfile === 'performance'} data-selected={resourceProfile === 'performance'} onClick={() => setResourceProfile('performance')}><Icon name="bolt" size={20}/><span><strong>{tr("Full performance")}</strong><small>{tr("Give Strata priority")}</small></span>{tr(resourceProfile === 'performance' ? <Icon name="check" size={15}/> : null)}</button></div></div> : <div className="native-choice__col"><span className="native-choice__label">{tr('Computer use')}</span><div className="native-resource-choice"><button type="button" aria-pressed={true} data-selected={true} title="沿用引擎配置，不额外应用20%资源预留"><Icon name="bolt" size={20}/><span><strong>{tr('Full performance')}</strong></span><Icon name="check" size={15}/></button></div><small className="muted">N1X 按引擎配置运行，不额外套用20%预设；系统分配与已保存的资源参数保持不变。</small></div>}
+       </div>
++      {n1xDeepseek ? <p className="small muted">{installed?.ready ? `此版本已保存上下文：${((installed.context ?? 0)/1024).toLocaleString()}K。` : '此版本未准备；加载时使用1024K上下文与自动生成加速。'}{loadedSelected ? ` 当前实际运行：${((loadedSelected.context ?? 0)/1024).toLocaleString()}K；按N1X固定策略加载；最大容量不代表已验证满长输入。` : '这些选项不代表已有模型正在运行。'}</p> : null}
+       {tr(loadedSelected?.metrics?.engine?.drafting_note ? <p className="small muted native-spill-note">{tr(String(loadedSelected.metrics.engine.drafting_note))}</p> : null)}
+-      {roleCards.length > 1 ? <GpuRoles cards={roleCards} roles={effectiveRoles} custom={customRoles} recommendedRoles={recommended.roles} vendor={engineVendor} disabled={!!active} onChange={changeRoles} onBack={() => setRoles(null)} memoryGb={selectedSize ? memoryNeeded(selectedSize) || null : null} ramGb={pcRam} spillGb={selectedSize ? fitOn(selectedSize, fitHardware).spillGb : 0} usedBy={i => usedBy([i])}/> : null}
++      {!n1xDeepseek && roleCards.length > 1 ? <GpuRoles cards={roleCards} roles={effectiveRoles} custom={customRoles} recommendedRoles={recommended.roles} vendor={engineVendor} disabled={!!active} onChange={changeRoles} onBack={() => setRoles(null)} memoryGb={selectedSize ? memoryNeeded(selectedSize) || null : null} ramGb={pcRam} spillGb={selectedSize ? fitOn(selectedSize, fitHardware).spillGb : 0} usedBy={i => usedBy([i])}/> : null}
+       {tr(roleCards.length > 1 && (native?.hardware?.gpus ?? []).length > roleCards.length ? <p className="small muted native-cards__note">{tr('Not used: {0} (another make of graphics card than this engine drives).', [(native?.hardware?.gpus ?? []).filter(g => !roleCards.some(r => r.index === g.index && r.vendor === g.vendor)).map(g => g.name).join(', ')])}</p> : null)}
+-      {tr(selectedSize?.imagesCapable && !selectedSize.images ? <p className="small muted native-spill-note">{tr("This model can read pictures, but the engine installed here does not include the picture reader yet, so Read pictures is off. Update the engine in Settings → About to turn it on.")}</p> : null)}
++
++      {tr(!n1xDeepseek && selectedSize?.imagesCapable && !selectedSize.images ? <p className="small muted native-spill-note">{tr("This model can read pictures, but the engine installed here does not include the picture reader yet, so Read pictures is off. Update the engine in Settings → About to turn it on.")}</p> : null)}
+       {tr(selectedSize?.images ? <><div className="native-image-reading"><label><input type="checkbox" checked={vision !== 'no'} disabled={!selectedSize?.images || !!active} onChange={e => setVision(e.target.checked ? 'yes' : 'no')}/><span><strong>{tr("Read pictures ")}<small>{tr("On by default")}</small></strong><small>{tr("Understand photos, screenshots and charts. The picture files download automatically. Turn it off to save memory.")}</small></span></label>{tr(expert && vision !== 'no' ? <Select ariaLabel={tr("Image encoder device")} value={vision === 'yes' ? 'yes' : vision} options={[{ value: 'yes', label: 'Automatic' }, { value: 'gpu', label: 'GPU' }, { value: 'cpu', label: 'CPU' }]} onChange={setVision}/> : null)}</div>{tr(vision !== 'no' && installed?.ready && installed.visionPrepared === false ? <div className="native-vision-missing" role="status"><span>{tr("Picture reading needs a few more files that are not on this computer yet.")}</span><Btn size="sm" disabled={pending || !!active} onClick={() => void download()}>{tr("Download picture-reading files")}</Btn></div> : null)}</> : null)}
+      </> : null)}
+-     <EngineWarning native={native}/>
++     {familyEngine?.usable
++       ? <details className="small"><summary>引擎与兼容性详情</summary><p>{familyEngine.notice}</p><p>{installed?.ready ? '当前版本文件已准备。' : '此版本尚未准备；已存在的文件可复用，但仍需完成校验与原生加载配置。其他量化版本尚未实测。'}</p><p>GPU 负责 CUDA 推理，CPU 参与未驻留专家计算；NPU 不作为辅助显卡。GPU 预算采用已测配置，更长输入仍须验证。</p>{loadedSelected ? <p>当前运行：{selectedSize?.model} · {(loadedSelected.context ?? 0).toLocaleString()} tokens。本次实际运行参数以引擎为准。</p> : null}</details>
++       : <EngineWarning native={native}/>}
+      {tr(active ? <NativeProgress job={active} label={jobLabel(active)}/> : null)}
+      {tr(job?.state === 'error' ? <ErrorNotice message={job.error ?? job.summary} action={tr("Retry")} onRetry={() => void load()}/> : null)}
+      {tr(error ? <ErrorNotice message={error}/> : null)}
+      {selectedSize && installed?.ready ? <NativeTuneBadge model={selectedSize.id} resourceProfile={resourceProfile} vision={selectedSize.images ? vision : 'no'}/> : null}
+-     <div className="native-model-actions">{tr(loadedSelected ? <><Btn disabled={pending || !!active} onClick={() => void perform(() => nativeAction(`instances/${loadedSelected.id}/unload`))}>{tr("Unload")}</Btn>{tr(onReady ? <Btn variant="primary" onClick={onReady}>{tr("Start chatting")}</Btn> : <span className="native-ready">{tr("Ready")}</span>)}</> : onReady && native?.instances.some(i => i.status === 'ready') ? <Btn variant="primary" onClick={onReady}>{tr("Start chatting")}</Btn> : <><Btn icon="gauge" disabled={!installed?.ready || !native?.available || !!active || !selectedSize || selectedSize.needsNewerEngine} onClick={() => setTuneOpen(true)}>{tr("Tune model")}</Btn><Btn variant="primary" icon="models" disabled={pending || !native?.available || !!active || !selectedSize || !!selectedSize.needsNewerEngine} onClick={() => void load()}>{tr(pending ? 'Checking…' : installed?.ready ? 'Load model' : 'Download & load')}</Btn></>)}</div>
++     <div className="native-model-actions">{tr(loadedSelected ? <>{n1xDeepseek && (context!==loadedSelected.context || drafting!==installed?.drafting) ? <Btn variant="primary" disabled={pending || !!active} onClick={()=>void load()}>应用并重新加载</Btn> : null}<Btn disabled={pending || !!active} onClick={() => void perform(() => nativeAction(`instances/${loadedSelected.id}/unload`))}>{tr("Unload")}</Btn>{tr(onReady ? <Btn variant="primary" onClick={onReady}>{tr("Start chatting")}</Btn> : <span className="native-ready">{tr("Ready")}</span>)}</> : onReady && native?.instances.some(i => i.status === 'ready') ? <Btn variant="primary" onClick={onReady}>{tr("Start chatting")}</Btn> : <><Btn icon="gauge" disabled={n1xDeepseek || !installed?.ready || !native?.available || !!active || !selectedSize || selectedSize.needsNewerEngine} onClick={() => setTuneOpen(true)}>{tr("Tune model")}</Btn><Btn variant="primary" icon="models" disabled={pending || !native?.available || !!active || !selectedSize || !!selectedSize.needsNewerEngine} onClick={() => void load()}>{tr(pending ? 'Checking…' : installed?.ready ? 'Load model' : 'Download & load')}</Btn></>)}</div>
+     </section>
+     {tr(expert && IMAGE_GENERATION_VISIBLE ? <><details className="native-generation"><summary>{tr("Image generation ")}<span className="muted">{tr("Optional")}</span></summary><RunImageModel library={imageLibrary} disabled={pending || !!active} onChange={() => { }}/></details></> : null)}
+-    {tr(expert ? <section id="native-expert-settings" ref={expertSection} className="st-card native-execution"><h2 className="h4">{tr("Expert settings")}</h2>{tr(tunedNow ? <p className="small muted native-tuned-note">{tr("Showing the values of your tuning '{0}'.", [tunedNow.name])}</p> : null)}<label className="native-toggle"><span><strong>{tr("Run multiple models")}</strong><small>{tr("Loading another model keeps the others loaded.")}</small></span><button className="st-toggle" role="switch" aria-label={tr("Run multiple models")} aria-checked={multiple} onClick={() => setMultiple(v => !v)}/></label>{tr(cardsGpus.length > 1 ? <label className="input-field"><span>{tr("Layer split")}</span><input className="st-input" value={split} placeholder={tr("auto or 16,32")} onChange={e => setSplit(e.target.value)}/></label> : null)}<div className="native-field-grid"><label className="input-field"><span>{tr("Context memory")}</span><Select ariaLabel={tr("Native KV format")} value={kv} options={[{ value: 'int8', label: 'INT8' }, { value: 'q4_0', label: 'Q4' }, { value: 'k8v4', label: 'K8 / V4' }]} onChange={setKv}/></label><label className="input-field"><span>{tr("Low-RAM mode")}</span><Select ariaLabel={tr("Native low RAM mode")} value={lowRam} options={['auto', 'resident', 'mmap'].map(v => ({ value: v, label: v === 'auto' ? 'Automatic' : v === 'resident' ? 'Keep experts in RAM' : 'Read experts from disk' }))} onChange={setLowRam}/></label></div>{tr(installed ? <><NativeSettingsFile model={installed.model}/><NativeSettings model={installed.model}/></> : <p className="small muted">{tr("More engine parameters become available after preparing this version.")}</p>)}</section> : null)}
++    {n1xDeepseek && expert && installed ? <section className="st-card"><h2 className="h4">DeepSeek 原生参数</h2><p className="small muted">N1X桌面加载固定1024K上下文与DSpark自动。其他参数沿用当前保存配置；本页不会更改系统内存／显存分配。</p><NativeSettingsFile model={installed.model}/><NativeSettings model={installed.model}/></section> : null}
++    {tr(expert && !n1xDeepseek ? <section id="native-expert-settings" ref={expertSection} className="st-card native-execution"><h2 className="h4">{tr("Expert settings")}</h2>{tr(tunedNow ? <p className="small muted native-tuned-note">{tr("Showing the values of your tuning '{0}'.", [tunedNow.name])}</p> : null)}<label className="native-toggle"><span><strong>{tr("Run multiple models")}</strong><small>{tr("Loading another model keeps the others loaded.")}</small></span><button className="st-toggle" role="switch" aria-label={tr("Run multiple models")} aria-checked={multiple} onClick={() => setMultiple(v => !v)}/></label>{tr(cardsGpus.length > 1 ? <label className="input-field"><span>{tr("Layer split")}</span><input className="st-input" value={split} placeholder={tr("auto or 16,32")} onChange={e => setSplit(e.target.value)}/></label> : null)}<div className="native-field-grid"><label className="input-field"><span>{tr("Context memory")}</span><Select ariaLabel={tr("Native KV format")} value={kv} options={[{ value: 'int8', label: 'INT8' }, { value: 'q4_0', label: 'Q4' }, { value: 'k8v4', label: 'K8 / V4' }]} onChange={setKv}/></label><label className="input-field"><span>{tr("Low-RAM mode")}</span><Select ariaLabel={tr("Native low RAM mode")} value={lowRam} options={['auto', 'resident', 'mmap'].map(v => ({ value: v, label: v === 'auto' ? 'Automatic' : v === 'resident' ? 'Keep experts in RAM' : 'Read experts from disk' }))} onChange={setLowRam}/></label></div>{tr(installed ? <><NativeSettingsFile model={installed.model}/><NativeSettings model={installed.model}/></> : <p className="small muted">{tr("More engine parameters become available after preparing this version.")}</p>)}</section> : null)}
+    </div>
+-   <aside className="stack stack--lg"><PcFitCard gpuName={pcGpu?.name} ramGb={pcRam} vramGb={pcVram} diskGb={selectedSize?.multi_file ? selectedSize.disk_gb ?? selectedSize.download_gb : null} inUse={keptModels.length ? { ramGb: Math.round(keptRam), vramGb: Math.round(keptVramOn(chosenCards)) } : null} fit={selectedSize ? fitOn(selectedSize, fitHardware, true, { context, kv }) : null}/><section className="st-card"><h2 className="h4">{tr("Model files")}</h2><p className="small muted">{tr("Strata prepares all shards, the draft layer and shared files. Completed downloads are reused.")}</p><code className="native-path">{installed?.dataFolder ?? native?.downloadDirectory ?? native?.installed?.data_folder ?? 'Choose an installation'}</code><Btn size="sm" variant="ghost" onClick={() => { setSettingsSection('Storage'); go('settings'); }}>{tr("Storage settings")}</Btn></section><Btn size="sm" variant="ghost" onClick={onOtherModels}>{tr("Other local models\u2026")}</Btn></aside>
++   <aside className="stack stack--lg">{n1xDeepseek ? <N1xRuntimeCard hardware={hardware} measuredHardware={native?.instances.find(i => i.status==='ready' && i.metrics?.hardware)?.metrics?.hardware} instance={loadedSelected} gpuName={pcGpu?.name} ramGb={pcRam} vramGb={pcVram}/> : <PcFitCard gpuName={pcGpu?.name} ramGb={pcRam} vramGb={pcVram} diskGb={selectedSize?.multi_file ? selectedSize.disk_gb ?? selectedSize.download_gb : null} inUse={keptModels.length ? { ramGb: Math.round(keptRam), vramGb: Math.round(keptVramOn(chosenCards)) } : null} fit={selectedSize ? fitOn(selectedSize, fitHardware, true, { context, kv }) : null}/>}<section className="st-card"><h2 className="h4">{tr("Model files")}</h2><p className="small muted">{tr("Strata prepares all shards, the draft layer and shared files. Completed downloads are reused.")}</p><code className="native-path">{installed?.dataFolder ?? native?.downloadDirectory ?? native?.installed?.data_folder ?? 'Choose an installation'}</code><Btn size="sm" variant="ghost" onClick={() => { setSettingsSection('Storage'); go('settings'); }}>{tr("Storage settings")}</Btn></section><Btn size="sm" variant="ghost" onClick={onOtherModels}>{tr("Other local models\u2026")}</Btn></aside>
+   </div>
+   
+ <Dialog open={!!plan} title={tr(installed?.ready ? "Apply settings and load" : "Download and prepare")} compact onClose={() => !pending && setPlan(null)} actions={<><Btn disabled={pending} onClick={() => setPlan(null)}>{tr("Cancel")}</Btn><Btn variant="primary" disabled={pending || !!plan?.plan?.disk_short} onClick={() => void download()}>{tr(installed?.ready ? "Apply & load" : "Download & load")}</Btn></>}><p><strong>{tr(plan?.plan?.title ?? selectedFamily?.title)}</strong>{tr(installed?.ready ? null : <>{tr(" \u00B7 approximately ")}{tr(plan?.plan?.download_gb ?? selectedSize?.download_gb)}{tr(" GB")}</>)}</p>{tr(plan?.drafting?.needed ? <p className="small muted">{tr("Choosing DFlash2 also downloads its drafter: about {0} GB, once. If it does not fit in graphics memory, the model uses the MTP instead.", [plan.drafting.gb])}</p> : null)}{tr(installed?.ready ? <p className="small muted">{tr("The model files are already on this computer. Nothing will be downloaded; only the settings you chose are applied.")}</p> : null)}{tr(plan?.plan?.disk_short ? <ErrorNotice message={plan.plan.disk_short}/> : null)}{tr(installed?.ready ? <p className="small muted">{tr("Any currently loaded native models will be unloaded first.")}</p> : <><p className="small muted">{tr("Existing files are checked and reused. Any currently loaded native models will be unloaded before preparing files.")}</p><p className="small muted">{tr("Your computer may feel slower while weights load. You can stop the download and resume later.")}</p></>)}{tr(selectedSize?.images ? <p className="small muted">{tr("Vision encoder files are included. Picture reading loads only when enabled.")}</p> : null)}</Dialog>
+--- a/apps/host/src/components/VersionPicker.tsx
++++ b/apps/host/src/components/VersionPicker.tsx
+@@ -10,6 +10,7 @@
+ /** The name a version goes by in the list: the quantization, with the maker where the quantization alone is ambiguous. */
+ export function versionName(v: CatalogVersion, withMaker = false): string {
+   switch (v.sourceFamily) {
++    case 'deepseek41': return `DeepSeek 1017 · ${v.model.replace(/^IST-DAS-/, '')}`;
+     case 'swift': return `Swift ${v.model}`;
+     case 'unsloth': return `Unsloth ${v.model}`;
+     case 'nvfp4': return tr(nvfp4Version(v.model)?.name ?? v.model);
+@@ -26,7 +27,8 @@
+  * which stays on the SSD, is not in it); the download size is secondary. "Uses SSD N GB" appears only where this computer would read
+  * part of the model from its SSD. The first group is a fixed list of four; the rest fold away.
+  */
+-export function VersionPicker({ versions, selectedId, hardware, onSelect, onOwnGguf, downloaded, showRecommended = true, moreLabel, pick }: {
++export function VersionPicker({ versions, selectedId, hardware, onSelect, onOwnGguf, downloaded, showRecommended = true, moreLabel, pick, suppressFit = false }: {
++  suppressFit?: boolean;
+   versions: CatalogVersion[];
+   selectedId: string;
+   hardware: FitHardware | null | undefined;
+@@ -46,21 +48,21 @@
+   // A group is open when the person opened it; until they touch it, only the group that holds the selected version is open.
+   const [opened, setOpened] = useState<Record<string, boolean>>({});
+   const selected = versions.find(v => v.id === selectedId);
+-  const recommended = recommendedVersions(versions, pick);
++  const recommended = suppressFit ? [] : recommendedVersions(versions, pick);
+   // Where the recommended four are shown outside the menu, the menu holds only the others.
+   const apart = new Set(showRecommended ? [] : recommended.map(x => x.v.id));
+   const rest = versions.filter(v => !apart.has(v.id));
+   const groups = [
+     ...VERSION_GROUPS.map(g => ({ id: g.id, title: g.title, items: rest.filter(v => g.families.includes(v.sourceFamily)) })),
+-    { id: 'other', title: 'Qwen3.6 models', items: rest.filter(v => !VERSION_GROUPS.some(g => g.families.includes(v.sourceFamily))) },
++    { id: 'other', title: versions.every(v => v.sourceFamily === 'deepseek41') ? 'DeepSeek 1017 · 量化版本' : 'Other models', items: rest.filter(v => !VERSION_GROUPS.some(g => g.families.includes(v.sourceFamily))) },
+   ].filter(g => g.items.length);
+   const row = (v: CatalogVersion, label: string, note?: string) => {
+     const fit = fitOn(v, hardware);
+     const on = v.id === selectedId;
+     const line = versionNote(v.model);
+     return <button key={`${label}-${v.id}`} role="menuitemradio" aria-checked={on} className={cx('version-row', on && 'is-on')} onClick={() => { onSelect(v.id); setOpen(false); }}>
+-      <span className="version-row__name"><span className="version-row__title">{tr(on ? <Icon name="check" size={14}/> : null)}<strong>{label}</strong>{tr(note ? <span className="muted"> · {tr(note)}</span> : null)}{tr(downloaded?.has(v.id) ? <span className="version-row__have">{tr("Downloaded")}</span> : null)}{tr(fit.known && fit.spillGb >= 1 ? <span className="version-row__ssd">{tr("Uses SSD {0} GB", [Math.round(fit.spillGb)])}</span> : null)}</span>{tr(line ? <small className="version-row__note muted">{line}</small> : null)}</span>
+-      <span className="version-row__ram">{gb(fit.memoryGb)}</span>
++      <span className="version-row__name"><span className="version-row__title">{tr(on ? <Icon name="check" size={14}/> : null)}<strong>{label}</strong>{tr(note ? <span className="muted"> · {tr(note)}</span> : null)}{tr(downloaded?.has(v.id) ? <span className="version-row__have">{tr("Downloaded")}</span> : null)}{tr(!suppressFit && fit.known && fit.spillGb >= 1 ? <span className="version-row__ssd">{tr("Uses SSD {0} GB", [Math.round(fit.spillGb)])}</span> : null)}</span>{tr(line ? <small className="version-row__note muted">{line}</small> : null)}</span>
++      <span className="version-row__ram">{suppressFit ? '待测算' : gb(fit.memoryGb)}</span>
+       <span className="version-row__dl">{gb(v.download_gb)}</span>
+     </button>;
+   };
+@@ -68,20 +70,21 @@
+   return <>
+     <button ref={trigger} type="button" className="version-trigger" aria-haspopup="menu" aria-expanded={open} aria-label={tr("Model version")} onClick={() => setOpen(v => !v)}>
+       <strong>{selected && !apart.has(selected.id) ? versionName(selected, true) : tr(moreLabel ?? "Choose a version")}</strong>{tr(selected && !apart.has(selected.id) && downloaded?.has(selected.id) ? <span className="version-row__have">{tr("Downloaded")}</span> : null)}
+-      <span className="version-trigger__need muted">{tr(fit && selected?.multi_file && selected.disk_gb ? tr("{0} RAM + VRAM, plus about {1} GB of disk", [gb(fit.memoryGb), Math.round(selected.disk_gb)]) : fit ? `${gb(fit.memoryGb)} RAM + VRAM` : '')}</span>
++      <span className="version-trigger__need muted">{tr(suppressFit ? selected ? `整套文件 ${gb(selected.download_gb)}` : '' : fit && selected?.multi_file && selected.disk_gb ? tr("{0} RAM + VRAM, plus about {1} GB of disk", [gb(fit.memoryGb), Math.round(selected.disk_gb)]) : fit ? `${gb(fit.memoryGb)} RAM + VRAM` : '')}</span>
+       <Icon name="chevron" size={14} className="version-trigger__chev"/>
+     </button>
+     {tr(open ? <FloatingMenu anchor={trigger.current} title={tr("Model version")} width={620} onClose={() => setOpen(false)}>
+-      <div className="version-menu">
+-        {tr(showRecommended ? <><div className="version-head"><span>{tr("Recommended")}</span><span>{tr("RAM + VRAM")}</span><span>{tr("Download")}</span></div>{tr(recommended.map(({ r, v }) => row(v, versionName(v, true), r.note)))}</> : <div className="version-head"><span>{tr("All other versions")}</span><span>{tr("RAM + VRAM")}</span><span>{tr("Download")}</span></div>)}
+-        {tr(groups.map(g => {
++      <div className={cx("version-menu", suppressFit && "version-menu--n1x")}>
++        {tr(showRecommended && !suppressFit ? <><div className="version-head"><span>{tr("Recommended")}</span><span>{suppressFit ? '本机需求' : tr('RAM + VRAM')}</span><span>{suppressFit ? '整套文件' : tr("Download")}</span></div>{tr(recommended.map(({ r, v }) => row(v, versionName(v, true), r.note)))}</> : <div className="version-head"><span>{suppressFit ? 'DeepSeek 1017 · 量化版本' : tr('All other versions')}</span><span>{suppressFit ? '本机需求' : tr('RAM + VRAM')}</span><span>{suppressFit ? '整套文件' : tr("Download")}</span></div>)}
++        {tr(suppressFit ? [...versions].sort((a,b)=>parseFloat(a.model.replace(/[^0-9.]/g,''))-parseFloat(b.model.replace(/[^0-9.]/g,''))).map(v=>row(v,versionName(v))) : groups.map(g => {
+           const closed = !groupOpen(opened, g.id, g.items.some(v => v.id === selectedId));
+           return <div className="version-group" key={g.id} data-open={!closed || undefined}>
+             <button role="menuitem" className="version-group__head" aria-expanded={!closed} onClick={() => setOpened(o => ({ ...o, [g.id]: closed }))}><span>{tr(g.title)} <span className="muted">{tr(g.items.length)}</span></span><Icon name="chevron" size={14} className={cx(!closed && 'is-open')}/></button>
+             {tr(!closed ? g.items.map(v => row(v, versionName(v))) : null)}
+           </div>;
+         }))}
+-        <button role="menuitem" className="version-group__head version-own" onClick={() => { setOpen(false); onOwnGguf(); }}><span>{tr("Use your own GGUF…")}</span><Icon name="folder" size={14}/></button>
++        {<button role="menuitem" className="version-group__head version-own" onClick={() => { setOpen(false); onOwnGguf(); }}><span>{tr("Use your own GGUF…")}</span><Icon name="folder" size={14}/></button>}
++        {suppressFit ? <p className="xs muted" style={{padding:"8px 18px"}}>IST-DAS 是量化版本标识，以上均属于 DeepSeek V4.1 Flash 1017。内存需求取决于上下文、专家缓存及 SSD 分层读取，当前没有可靠的本机峰值估算；已加载版本的整机占用见右侧。整套文件包含分片和配套文件。</p> : null}
+       </div>
+     </FloatingMenu> : null)}
+   </>;
+--- a/apps/host/src/lib/native.ts
++++ b/apps/host/src/lib/native.ts
+@@ -9,6 +9,7 @@
+ export interface NativeJob {id:string;kind:string;guided?:boolean;model?:string;family?:string;state:'running'|'done'|'error'|'cancelled';startedAt:string;summary:string;error:string|null;details?:string;result:Record<string,any>|null;progress?:Record<string,any>|null}
+ export interface NativeInstance {id:string;apiModelId:string;model:string;label:string;aliases?:string[];vision?:boolean;resourceProfile?:'work'|'performance'|null;context?:number;port:number;gpus:number[];status:'loading'|'ready'|'unloading'|'error';phase:string;loadedAt:string;error:string|null;metrics:Record<string,any>|null}
+ export interface NativeState {
++  localEngines?:{deepseek41?:{usable:boolean;notice:string}|null};
+   /** The picture reader (strata-vision) is installed with the engine, so models marked for pictures can read them here. */
+   /** Strata Control's view of the engine for this computer (the app): usable false = none found or recognised; `notice` says why in plain words. */
+   engine?:{usable:boolean;notice?:string|null;wrongMake?:boolean;version?:string|null};
+--- a/apps/host/src/main.tsx
++++ b/apps/host/src/main.tsx
+@@ -28,3 +28,5 @@
+ import './styles/board.css';
+ 
+ import './styles/gpu-roles.css';
++
++import './styles/zack-theme.css';
+--- a/apps/host/src/screens/Monitor.tsx
++++ b/apps/host/src/screens/Monitor.tsx
+@@ -134,7 +134,9 @@
+     const gpuLoad = gpuValue('utilizationPct', 'mean'), vram = gpuValue('memoryUsedGb'), temperature = gpuValue('temperatureC', 'max'), power = gpuValue('powerW'), powerLimit = gpuValue('powerLimitW'), pcieRx = gpuValue('pcieRxMbs');
+     const vramTotal = gpuCapacity(report('memoryUsedGb').partial ? report('memoryUsedGb').devices : selectedGpus);
+     const singleReading = selectedGpus.length === 1 ? readings?.find(r => r.id === gpuId(selectedGpus[0])) : undefined;
+-    const gen = singleReading?.pcieGenMax ?? singleReading?.pcieGen, width = singleReading?.pcieWidth;
++    // N1X 的驱动 PCIe 字段不能直接作为片上 CPU/GPU 主通路的带宽证据。
++    const n1xInterconnect = selectedGpus.length === 1 && /\bN1X\b/i.test(selectedGpus[0]?.name ?? '');
++    const gen = singleReading?.pcieGen, width = singleReading?.pcieWidth;
+     const cpu = cpuChoice === 'all' ? data.hardware.cpuLoad : data.hardware.cpus?.find(p => p.id === cpuChoice)?.utilizationPct;
+     const requests = data.requests ?? [], last = requests.find(r => r.state === 'done'), visibleRequests = showAll ? requests : requests.slice(0, 12);
+     const throughput = sourceLabel(data.telemetry?.throughput), throughputKnown = throughput !== 'Unavailable';
+@@ -192,7 +194,7 @@
+       <MonitorMetric label={tr(shared ? 'Shared GPU memory' : 'VRAM')} icon="layers" value={number(vram, 1)} unit={hasReading(vram) ? vramTotal ? `/ ${number(vramTotal, 0)} GB` : 'GB' : ''} source={gpuSource('memoryUsedGb')} sub={whose('memoryUsedGb') ?? (shared ? 'Same memory pool as system RAM' : multipleGpus ? 'Total across selected GPUs' : cacheKnown && devices.length === 1 ? `${number(data.expertCache.used)} experts cached` : 'GPU memory')} chart={chart(shared ? 'Shared GPU memory' : 'VRAM', historyGpu('memoryUsedGb', 'vramUsedGb'), 'GB', vramTotal)}/>
+       <MonitorMetric label={tr("GPU temp")} icon="thermometer" value={number(temperature)} unit={hasReading(temperature) ? '°C' : ''} source={gpuSource('temperatureC', 'max')} sub={whose('temperatureC', 'max') ?? (multipleGpus ? 'Hottest selected GPU' : selectedGpus[0]?.name ?? (selectedInstance && !selectedInstance.gpuIds.length ? native ? 'Automatic GPU placement' : 'CPU only · no GPU assigned' : 'No GPU detected'))} chart={chart('GPU temperature', historyGpu('temperatureC', 'gpuTempC', 'max'), '°C', 90, 'var(--st-warn)')}/>
+       <MonitorMetric label={tr("Power")} icon="bolt" value={number(power)} unit={hasReading(power) ? 'W' : ''} source={gpuSource('powerW')} sub={whose('powerW') ?? (hasReading(powerLimit) ? `of ${number(powerLimit)} W limit` : multipleGpus ? 'Total across selected GPUs' : 'GPU power draw')} chart={chart('GPU power', historyGpu('powerW', 'powerW'), 'W', powerLimit ?? undefined)}/>
+-      <MonitorMetric label={tr("PCIe")} icon="link" value={hasReading(gen) ? `Gen${gen}` : multipleGpus ? number(pcieRx, 1) : '—'} unit={hasReading(gen) && hasReading(width) ? `x${width}` : multipleGpus && hasReading(pcieRx) ? 'MB/s' : ''} source={hasReading(gen) ? sourceLabel(singleReading?.source) : gpuSource('pcieRxMbs')} sub={hasReading(pcieRx) ? `To GPU ${number(pcieRx, 1)} MB/s${whose('pcieRxMbs') ? ` · ${whose('pcieRxMbs')}` : ''}${hasReading(gen) && hasReading(singleReading?.pcieGen) && singleReading.pcieGen < gen ? ` · idle Gen${singleReading.pcieGen}` : ''}` : shared ? 'Shared memory · no PCIe link' : multipleGpus ? 'Total transfer to selected GPUs' : 'Transfer to GPU unavailable'} chart={chart('PCIe transfer', historyGpu('pcieRxMbs', 'pcieRxMbs'), 'MB/s', undefined, 'var(--st-info)')}/>
++      {n1xInterconnect ? <MonitorMetric label="N1X 内存互连" icon="link" value="共享内存" unit="" source="架构说明" sub={`驱动 PCIe 原始读数：Gen${singleReading?.pcieGen ?? '—'} ×${singleReading?.pcieWidth ?? '—'}；不代表 CPU—GPU 主通路带宽。主通路吞吐暂未采集。`} chart={<p className="xs muted">保留原始读数用于诊断，不据此判断降速或硬件故障。</p>}/> : <MonitorMetric label={tr("PCIe")} icon="link" value={hasReading(gen) ? `Gen${gen}` : multipleGpus ? number(pcieRx, 1) : '—'} unit={hasReading(gen) && hasReading(width) ? `x${width}` : multipleGpus && hasReading(pcieRx) ? 'MB/s' : ''} source={hasReading(gen) ? sourceLabel(singleReading?.source) : gpuSource('pcieRxMbs')} sub={hasReading(pcieRx) ? `To GPU ${number(pcieRx, 1)} MB/s${whose('pcieRxMbs') ? ` · ${whose('pcieRxMbs')}` : ''}${hasReading(gen) && hasReading(singleReading?.pcieGen) && singleReading.pcieGen < gen ? ` · idle Gen${singleReading.pcieGen}` : ''}` : shared ? 'Shared memory · no PCIe link' : multipleGpus ? 'Total transfer to selected GPUs' : 'Transfer to GPU unavailable'} chart={chart('PCIe transfer', historyGpu('pcieRxMbs', 'pcieRxMbs'), 'MB/s', undefined, 'var(--st-info)')}/>}
+       <MonitorMetric label={tr("CPU")} icon="cpu" value={number(cpu)} unit={hasReading(cpu) ? '%' : ''} source={hasReading(cpu) ? 'Measured' : 'Unavailable'} sub={cpuName} chart={chart('CPU utilization', historyCpu, '%', 100)}/>
+       <MonitorMetric label={tr("Disk read")} icon="disk" value={number(hasReading(data.hardware.diskReadGbs) ? data.hardware.diskReadGbs >= 1 ? data.hardware.diskReadGbs : data.hardware.diskReadGbs * 1024 : null, 1)} unit={hasReading(data.hardware.diskReadGbs) ? data.hardware.diskReadGbs >= 1 ? 'GB/s' : 'MB/s' : ''} source={hasReading(data.hardware.diskReadGbs) ? 'Measured' : 'Unavailable'} sub={hasReading(data.hardware.diskWriteMbs) ? `Write ${number(data.hardware.diskWriteMbs, 1)} MB/s` : 'Read throughput'} chart={chart('Disk read', history.map(s => hasReading(s.diskReadGbs) ? s.diskReadGbs * 1024 : null), 'MB/s', undefined, 'var(--st-info)')}/>
+     </div>
+--- a/apps/host/src/styles/app.css
++++ b/apps/host/src/styles/app.css
+@@ -7522,3 +7522,12 @@
+ 
+ /* A message the person typed keeps its line breaks (#3720). */
+ .st-bubble__text { white-space: pre-wrap; overflow-wrap: anywhere; }
++
++/* N1X three-version menu: direct choices without inherited overflow. */
++.version-menu--n1x{min-width:0;width:100%;overflow-x:hidden}.version-menu--n1x .version-head,.version-menu--n1x .version-row{grid-template-columns:minmax(0,1fr) 100px 78px}.version-menu--n1x .version-row{padding-block:14px}.version-menu--n1x .version-row__name{white-space:normal}
++
++/* N1X fixed policy: equal flexible fields, with the resource policy on its own row. */
++.native-choice__row--n1x-fixed { display: flex; flex-wrap: wrap; align-items: stretch; gap: 14px 20px; }
++.native-choice__row--n1x-fixed > .native-choice__col:nth-child(-n+2) { flex: 1 1 180px; min-width: 0; }
++.native-choice__row--n1x-fixed > .native-choice__col:last-child { flex: 1 0 100%; min-width: 0; }
++.native-choice__row--n1x-fixed .native-fixed-value { display: flex; align-items: center; width: 100%; min-height: 44px; box-sizing: border-box; padding: 10px 14px; border: 1px solid var(--st-line); border-radius: 16px; background: var(--st-surface); color: var(--st-ink); line-height: 1.4; overflow-wrap: anywhere; }
+--- a/setup.py
++++ b/setup.py
+@@ -1491,6 +1491,10 @@
+     for line in s.strip().splitlines():
+         try:
+             idx, name, mem, cc, drv = [x.strip() for x in line.split(",")]
++            # N1X also exposes an NPU through nvidia-smi. It has no CUDA compute
++            # capability; never count its shared memory as another CUDA GPU.
++            if not cc.replace(".", "").isdigit():
++                continue
+             try:
+                 mem_gb = float(mem) / 1024.0   # nvidia-smi nounits: MiB
+             except ValueError:
+@@ -8225,6 +8229,10 @@
+     agent set with the same accepted tokens a round: 15.93 against 18.48 (+16%).  The same bits come out - only the scheduling
+     changes - and the drafter's own single-token windows (T=1) stay on the async path.  A discrete card keeps the engine's
+     default; STRATA_DSV41_ASYNC_T=n overrides the value, STRATA_DSV41_ASYNC_T=8 restores the default."""
++    if WIN and any('n1x' in str(c.get('name', '')).lower() for c in cards or []):
++        # Same environment as the measured N1X desktop trials. Without the
++        # explicit UMA reserve, 1M's generic estimate removes every GPU expert.
++        return {'DS4_COPY_GB': '0', 'DS4_UMA_GPU_RESERVE_GB': '8'}
+     if not cards or not any(c.get("uma") for c in cards):
+         return {}
+     value = os.environ.get("STRATA_DSV41_ASYNC_T") or "4"
+@@ -8250,12 +8258,22 @@
+     return r.returncode == 0 and "MISSING" not in text and "all present" in text, text
+ 
+ 
+-def dsv41_smoke(exe: Path, pack: Path, lib_dirs, gpus=None, timeout: int = 5400) -> tuple[bool, str]:
++def dsv41_n1x_args(cards, ram) -> list:
++    """Measured community policy, only for Windows N1X; no other GPU defaults change."""
++    if not WIN or not any('n1x' in str(c.get('name', '')).lower() for c in cards or []):
++        return []
++    return ['--reserve-mib', '8192', '--vram-experts', '0.90', '--cpu-threads', '6',
++            '--ssd-cache', '12' if float(ram or 0) >= 56 else '4', '--mmap-experts', 'on',
++            '--experts', '6', '--prefill-chunk', '1024', '--profile-readonly']
++
++
++def dsv41_smoke(exe: Path, pack: Path, lib_dirs, gpus=None, timeout: int = 5400, engine_args=None) -> tuple[bool, str]:
+     """16 tokens of a fixed prompt through the engine (tools/dsv41/smoke.py), the text checked: (True, text) or (False, why).  Takes a
+     few minutes: the engine reads what it needs from the SSD the first time."""
+     cmd = [sys.executable, str(ROOT / "tools" / "dsv41" / "smoke.py"), "--exe", str(exe), "--pack", str(pack)]
+     if gpus:
+         cmd += ["--gpus", ",".join(str(g) for g in gpus)]
++    cmd += [f'--engine-arg={v}' for v in engine_args or []]
+     try:
+         r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+                            env=dsv41_engine_env(lib_dirs))
+@@ -8477,7 +8495,8 @@
+             warn("the 16-word test run was skipped (STRATA_DSV41_NO_SMOKE=1)")
+         else:
+             say("  Testing the model with a short question (a few minutes: the engine reads the first experts from the disk) ...")
+-            good, why = dsv41_smoke(exe, pack, lib_dirs, [c["index"] for c in cards] if (a.gpu is not None or a.gpus) else None)
++            good, why = dsv41_smoke(exe, pack, lib_dirs, [c["index"] for c in cards] if (a.gpu is not None or a.gpus) else None,
++                                    engine_args=dsv41_n1x_args(cards, ram))
+             if not good:
+                 fail("the model does not answer sensibly after the preparation: " + (why.splitlines()[-1] if why else "no answer"),
+                      f"delete {pack} and run setup again so the pack is built fresh; if the test fails again, "
+@@ -8501,7 +8520,7 @@
+     # without it on the M5 Max), and the engine's "auto" would load it on a 128 GB Mac: its 7 GB of experts take memory the trunk's experts need.
+     args = ["--pack", str(pack), "--max-context", str(ctx), "--eos", "1", "--vision", ds_vision, "--dspark", "none" if mac else "auto",
+             *(["--dspark-conf", "0.65"] if md.get("recipe") == "ista" and not mac else []), *dsv41_prefill_chunk_args(cards, ram),
+-            *plan["args"]]
++            *plan["args"], *dsv41_n1x_args(cards, ram)]
+     env = dsv41_config_env(cards)
+     cfg = {"exe": str(exe), "args": args, "cwd": str(ROOT), "tokenizer": str(pack / "tokenizer"),
+            "model_name": fam["name"], "arch": fam["arch"], "log": str(home() / f"strata-{tag.lower()}.log"),
+--- a/src/dsv41/ds4_gg_cpu.cpp
++++ b/src/dsv41/ds4_gg_cpu.cpp
+@@ -18,7 +18,7 @@
+ 
+ #include <mutex>
+ #include <vector>
+-#if defined(_MSC_VER)
++#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+ #include <intrin.h>
+ #elif defined(__x86_64__)
+ #include <cpuid.h>
+@@ -150,7 +150,7 @@
+ // the AMD family (0x19 Zen 3/4, 0x1A Zen 5), 0 on any other vendor or if it cannot be read
+ static int amd_family() {
+     static const int fam = [] {
+-#if defined(_MSC_VER)
++#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+         int r[4];
+         __cpuid(r, 0);
+         char v[13];
+--- a/src/dsv41/ds4_pool.hpp
++++ b/src/dsv41/ds4_pool.hpp
+@@ -25,7 +25,9 @@
+ namespace strata::ds4 {
+ 
+ inline void cpu_relax() {
+-#if defined(_MSC_VER)
++#if defined(_MSC_VER) && defined(_M_ARM64)
++    __yield();
++#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+     _mm_pause();
+ #elif defined(__x86_64__) || defined(_M_X64)
+     __builtin_ia32_pause();
+--- a/src/kernels/cpu/expert_layout.cpp
++++ b/src/kernels/cpu/expert_layout.cpp
+@@ -7,7 +7,7 @@
+ #include <cstdlib>
+ #include <cstring>
+ #include <string>
+-#if defined(_MSC_VER)
++#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+ #include <intrin.h>
+ #include <immintrin.h>
+ #elif defined(__x86_64__) || defined(__i386__)
+--- a/tools/dsv41/smoke.py
++++ b/tools/dsv41/smoke.py
+@@ -68,6 +68,7 @@
+     ap.add_argument("--exe", required=True)
+     ap.add_argument("--pack", required=True)
+     ap.add_argument("--gpus")
++    ap.add_argument("--engine-arg", action="append", default=[])
+     ap.add_argument("--tokens", type=int, default=16)
+     ap.add_argument("--timeout", type=int, default=5400)
+     a = ap.parse_args()
+@@ -85,6 +86,7 @@
+             cmd += ["--window", "16"]
+         if a.gpus:
+             cmd += ["--gpus", a.gpus]
++        cmd += a.engine_arg
+         try:
+             r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=a.timeout, env=dict(os.environ))
+         except (OSError, subprocess.TimeoutExpired) as e:
+--- /dev/null
++++ b/apps/host/server/agent/loopback-strata-progress.mjs
+@@ -0,0 +1,30 @@
++// N1X本机接入补丁：仅信任已经登记的单路Strata服务的实际处理进度。
++// 不把心跳时间、请求存活或另一会话的活动当成进度；不改变原停止逻辑。
++export async function loopbackStrataProgress(route, connections, fetcher = fetch) {
++  if (route?.kind !== 'api') return null;
++  const conn = connections.find(c => c.id === route.connectionId);
++  if (!conn || conn.baseUrl.replace(/\/$/, '') !== 'http://127.0.0.1:8095/v1') return null;
++  const get = async path => {
++    const r = await fetcher('http://127.0.0.1:8095' + path, { signal: AbortSignal.timeout(2000), redirect: 'error' });
++    if (!r.ok) throw new Error('Local progress unavailable');
++    return r.json();
++  };
++  try {
++    const s = await get('/v1/status');
++    if (s.service !== 'strata' || !s.loaded || s.model !== route.modelId || s.concurrency?.serving !== 1 || s.activity?.in_flight !== 1) return null;
++    const m = await get('/metrics');
++    const live = m.live;
++    if (m.engine?.model !== route.modelId || !live || !['reading', 'generating'].includes(live.state)) return null;
++    const read = Number(live.prompt_read), generated = Number(live.generated);
++    if (!Number.isFinite(read) || read < 0 || !Number.isFinite(generated) || generated < 0) return null;
++    return { request: s.activity.last_request_at, read, generated, total: live.prompt_total ?? live.prompt_tokens };
++  } catch { return null; }
++}
++
++export function progressed(previous, next) {
++  if (!next) return false;
++  if (!previous) return next.read > 0 || next.generated > 0;
++  // 当前请求身份不变时才续期，防止另一客户端的请求延长本次等待。
++  return next.request === previous.request && next.total === previous.total &&
++    (next.read > previous.read || next.generated > previous.generated);
++}
+--- /dev/null
++++ b/apps/host/server/n1x-linux-attachment.mjs
+@@ -0,0 +1,29 @@
++// 本机Linux Strata的生命周期适配：复用官方服务，不创建或伪装Windows引擎。
++export const ATTACHED_ID='n1x-linux-1017';
++export function createN1xAttachment(fetcher=fetch) {
++  const base='http://127.0.0.1:8095';
++  let propsStarted=null,modelPath=null;
++  async function call(path,options={}) {
++    const r=await fetcher(base+path,{redirect:'error',signal:AbortSignal.timeout(3000),...options});
++    const data=await r.json();if(!r.ok)throw Error(data.error?.message??'Linux Strata服务不可用');return data;
++  }
++  async function status() {
++    const s=await call('/v1/status');
++    if(s.service!=='strata'||s.model!=='deepseek-v4.1-flash'||s.engine!=='ds4-0.1'||s.concurrency?.serving!==1)throw Error('本机Strata服务身份或单路配置不匹配');
++    return s;
++  }
++  async function instance() {
++    const s=await status();if(!s.loaded)return null;
++    const metrics=await call('/metrics');if(metrics.engine?.model!==s.model)throw Error('指标模型不匹配');
++    // 量化名称取自正在运行的引擎路径，不从待启用配置猜测。每次服务重启后重新读取。
++    if(propsStarted!==s.started){const props=await call('/props');modelPath=props.model_alias===s.model&&typeof props.model_path==='string'?props.model_path:null;propsStarted=s.started;}
++    const quant=modelPath?.match(/deepseek-v4\.1-flash-ist-das-(\d+\.\d+)bpw(?:\/|$)/)?.[1];
++    return {id:ATTACHED_ID,apiModelId:s.model,model:ATTACHED_ID,label:`DeepSeek 1017${quant?' · '+quant+'bpw':''} · Strata本地（Linux）`,context:s.context?.max_positions??s.cache_max_tokens,port:8095,gpus:[0],status:'ready',phase:metrics.live?.state??'idle',parallel:1,vision:s.vision?.enabled===true,key:'',aliases:[],mcpServers:{},metrics,modelPath,attachedLinux:true,notice:'使用本机WSL Linux ARM64 Strata引擎；参数来自strata-service.json；不使用Windows模型页的资源滑块。',loadedAt:new Date(s.started*1000).toISOString()};
++  }
++  async function unload() {
++    const s=await status();if(s.activity?.in_flight)throw Error('Linux服务仍有请求，请先完成或取消');
++    const r=await call('/v1/unload',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({model:s.model}),signal:AbortSignal.timeout(60000)});
++    if(r.loaded!==false||(await status()).loaded!==false)throw Error('服务尚未确认卸载');return r;
++  }
++  return {instance,status,unload};
++}
+--- /dev/null
++++ b/apps/host/server/n1x-model-settings.mjs
+@@ -0,0 +1,19 @@
++// N1X 模型页仅修改 DeepSeek 支持的启动参数，不生成 Qwen 参数或触发下载。
++export function flagValue(args, flag) { const at=(args??[]).indexOf(flag); return at>=0?args[at+1]:undefined; }
++function setFlag(args,flag,value) {
++ const out=[];for(let i=0;i<(args??[]).length;i++){if(args[i]===flag){i++;continue;}out.push(args[i]);}
++ out.push(flag,String(value));return out;
++}
++export function applyN1xModelSettings(config,requested,contextLimit) {
++ let next={...config,args:[...(config.args??[])]};
++ if(requested.n1xContext!==undefined){
++  const n=Number(requested.n1xContext),limit=Number(contextLimit);
++  if(!Number.isSafeInteger(n)||n<1024||!Number.isFinite(limit)||n>limit)throw new Error('上下文超出当前模型配置支持范围。');
++  next.args=setFlag(next.args,'--max-context',n);
++ }
++ if(requested.n1xDrafting!==undefined){
++  if(!['auto','on','off'].includes(requested.n1xDrafting))throw new Error('DeepSeek 预测草稿只支持 DSpark auto/on/off。');
++  next.args=setFlag(next.args,'--dspark',requested.n1xDrafting);
++ }
++ return next;
++}
+--- /dev/null
++++ b/apps/host/server/n1x-native-engine.mjs
+@@ -0,0 +1,44 @@
++// 本机源码构建的 DeepSeek 专用引擎。保留官方组件校验，不冒充通用或签名发布包。
++import {readFileSync,statSync} from 'node:fs';
++import {createHash} from 'node:crypto';
++import {fileURLToPath} from 'node:url';
++import {resolve} from 'node:path';
++import {execFileSync} from 'node:child_process';
++// 打包的 Node 可以是 x64 仿真进程；用 Windows CPU 架构核实宿主，失败则不启用。
++let arm64Host;
++function isArm64Host(){
++ if(arm64Host!==undefined)return arm64Host;
++ if(process.platform!=='win32')return arm64Host=false;
++ if(process.arch==='arm64')return arm64Host=true;
++ try{
++  const result=execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command','(Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty Architecture)'],{encoding:'utf8',windowsHide:true,timeout:10000});
++  return arm64Host=result.trim()==='12';
++ }catch{return arm64Host=false;}
++}
++const manifestFile=fileURLToPath(new URL('./n1x-native-build.json',import.meta.url));
++const bundledManifest=fileURLToPath(new URL('../../engine-n1x/MANIFEST.json',import.meta.url));
++let cached=null;
++export function localDeepSeekEngine(config){
++ if(config?.arch!=='deepseek41')return null;
++ const engine=localDeepSeekCapability();
++ return engine && typeof config.exe==='string' && resolve(config.exe).toLowerCase()===resolve(engine.exe).toLowerCase() ? engine : null;
++}
++export function localDeepSeekCapability(){
++ if(!isArm64Host())return null;
++ try{
++  let raw,m;
++  try { raw=readFileSync(bundledManifest,'utf8'); m=JSON.parse(raw);
++    const base=resolve(fileURLToPath(new URL('../../engine-n1x/',import.meta.url)));
++    const safe=p=>{if(typeof p!=='string'||! /^[a-zA-Z0-9_.-]+$/.test(p))throw Error('Invalid bundled engine member');return resolve(base,p);};
++    m={...m,exe:safe(m.exe),files:Object.fromEntries(Object.entries(m.files).map(([p,h])=>[safe(p),h]))};
++  } catch(error) { if(error.code!=='ENOENT')throw error; raw=readFileSync(manifestFile,'utf8');m=JSON.parse(raw); }
++  if(m.kind!=='local-source-build'||m.platform!=='windows-arm64'||m.arch!=='deepseek41')return null;
++  const stamp=raw+Object.keys(m.files).map(p=>{const s=statSync(p);return `${p}:${s.size}:${s.mtimeMs}:${s.ctimeMs}`;}).join('|');
++  if(cached?.stamp===stamp)return cached.result;
++  for(const [p,expected] of Object.entries(m.files))if(createHash('sha256').update(readFileSync(p)).digest('hex')!==expected)return null;
++  const pe=readFileSync(m.exe),offset=pe.readUInt32LE(60);
++  if(pe.toString('ascii',offset,offset+4)!=='PE\0\0'||pe.readUInt16LE(offset+4)!==0xaa64)return null;
++  const result={usable:true,source:'local-source-build',version:m.version,platform:m.platform,backend:'cuda',exe:m.exe,notice:'Windows ARM64 CUDA · 本机源码构建，仅 DeepSeek；短请求已验，1M 长输入未验。'};
++  cached={stamp,result};return result;
++ }catch{return null;}
++}
+--- /dev/null
++++ b/apps/host/src/components/N1xRuntimeCard.tsx
+@@ -0,0 +1,25 @@
++import { useEffect, useState } from 'react';
++import { api } from '../lib/client';
++import type { Hardware } from '../lib/types';
++import type { NativeInstance } from '../lib/native';
++
++// 沿用原生“这台电脑”的卡片和计量条；N1X 使用整机实测，不能冒充模型独占估算。
++function Meter({label,total,bytes}:{label:string;total:number;bytes:unknown}) {
++  const used=typeof bytes==='number' && Number.isFinite(bytes) ? bytes/2**30 : null;
++  const pct=used===null || total<=0 ? 0 : Math.max(0,Math.min(100,used/total*100));
++  return <div className="pc-meter"><div className="pc-meter__top"><span>{label}</span><b>{used===null ? '—' : `${used.toFixed(1)} GiB`}</b><span className="muted">共 {total.toFixed(1)} GiB</span></div><div className="pc-meter__track" role="img" aria-label={`${label}：${used===null ? '尚无实测' : `${used.toFixed(1)} GiB`}`}><i style={{width:`${pct}%`}}/></div></div>;
++}
++export function N1xRuntimeCard({instance,gpuName,ramGb,vramGb,hardware,measuredHardware}:{hardware?:Hardware|null;measuredHardware?:Record<string,any>;instance?:NativeInstance;gpuName?:string|null;ramGb:number|null;vramGb:number}) {
++  const [snapshot,setSnapshot]=useState<Hardware|null>(hardware??null);
++  useEffect(()=>{let alive=true; if(!measuredHardware)void api.get<Hardware>('/api/hardware?reprobe=1').then(h=>{if(alive)setSnapshot(h);}).catch(()=>{});return()=>{alive=false;};},[!!measuredHardware]);
++  const gpu=snapshot?.gpus.find(g=>/N1X/i.test(g.name));
++  const h=instance?.metrics?.hardware ?? measuredHardware ?? {ram_used:snapshot ? snapshot.memory.usedGb*2**30 : null,gpu_mem_used:gpu?.freeVramGb!=null ? (gpu.vramGb-gpu.freeVramGb)*2**30 : null}, e=instance?.metrics?.engine;
++  const last=instance?.metrics?.requests?.find((r:{drafts_offered?:number})=>(r.drafts_offered ?? 0)>0);
++  return <section className="st-card pc-card">
++    <div><h2 className="h4">这台电脑</h2><p className="small muted">{gpuName} · {vramGb} GiB 显存 · {ramGb?.toFixed(1) ?? '未知'} GiB 内存</p></div>
++    <Meter label={measuredHardware ? "显存 · 整机实测" : "显存 · 最近检测"} total={vramGb} bytes={h?.gpu_mem_used}/>
++    <Meter label={measuredHardware ? "RAM · 整机实测" : "RAM · 最近检测"} total={ramGb ?? 0} bytes={h?.ram_used}/>
++    <p className="pc-note">{instance ? '当前版本已加载。以上包含系统和其他应用占用，并非模型独占。' : measuredHardware ? '当前选中版本未加载；以上为整机实测，包含其他已加载版本。' : `当前版本未加载。最近检测：${snapshot?.probedAt ? new Date(snapshot.probedAt).toLocaleTimeString() : '待获取'}；不是模型加载后的预计占用。`}</p>
++    <details className="small muted"><summary>运行详情</summary><p>统一物理内存的不同统计口径不直接相加。</p><p>当前上下文：{instance?.context?.toLocaleString() ?? '未加载'} tokens<br/>KV：{e?.kv ?? '待引擎报告'}<br/>草稿元数据：{e?.drafting ?? '待引擎报告'}{last ? <><br/>最近草稿：接受 {last.drafts_accepted} / 提议 {last.drafts_offered}{e?.drafting === 'off' ? '（元数据未反映 DSpark 活动）' : ''}</> : null}</p></details>
++  </section>;
++}
+--- /dev/null
++++ b/apps/host/src/styles/zack-theme.css
+@@ -0,0 +1,6 @@
++/* Zack_yzq选择的淡蓝背景；保留原版布局、语义状态色和深色主题。 */
++:root:not([data-theme="dark"]) { --st-bg:#edf5ff; --st-surface-2:#f3f8ff; --st-line-soft:#e4eef9; }
++.zack-brand { display:inline-flex; align-items:center; gap:7px; max-width:100%; white-space:nowrap; }
++.zack-brand strong { font-size:16px; font-weight:700; letter-spacing:-.4px; }
++.zack-brand img { flex:none; object-fit:contain; }
++.native-resource-choice button:disabled { cursor:not-allowed; opacity:.48; box-shadow:none; }

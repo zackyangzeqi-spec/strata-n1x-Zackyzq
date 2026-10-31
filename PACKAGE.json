@@ -1,0 +1,137 @@
+{
+  "base_commit": "870aedd9e1ebe1c91f94da93b59af17729f6c5c0",
+  "stage": "experimental-public-source-patch",
+  "author": "Zack_yzq",
+  "files": [
+    {
+      "path": ".github/FUNDING.yml.example",
+      "sha256": "6c3af791eba6ea8a7f7f845ec58bad03df0e74832c05ef2259bd8a1c82e5a280",
+      "bytes": 176
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.md",
+      "sha256": "f57f311bd533eb6de5aafd7e7db83e7f9c8aa03543277ba5fcc61e648c224d0e",
+      "bytes": 674
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "e329c74e606d9d81dc9c1f9062b101bb2b77c18761c00a54a83cf9732266816a",
+      "bytes": 137
+    },
+    {
+      "path": "apps/desktop/src-tauri/icons/icon.ico",
+      "sha256": "242ad453cca303110f8e400eb78f26db6d625631519951351590a72e8eb2e974",
+      "bytes": 41086
+    },
+    {
+      "path": "apps/desktop/src-tauri/icons/icon.png",
+      "sha256": "e3180d4bec36076af79dcb089d257380f164be5cd9945941ec584382ec327faa",
+      "bytes": 138584
+    },
+    {
+      "path": "apps/host/public/brand/project-avatar.png",
+      "sha256": "e3180d4bec36076af79dcb089d257380f164be5cd9945941ec584382ec327faa",
+      "bytes": 138584
+    },
+    {
+      "path": "AUTHOR.md",
+      "sha256": "4ca28a77137afb669438b6c8b442615bbccf32178697be393bcf85cc5dcdd436",
+      "bytes": 651
+    },
+    {
+      "path": "docs/ASSETS.md",
+      "sha256": "93da58c22515218e6443f6a02480fe00713282fdae110d3fef77082b3fb72014",
+      "bytes": 867
+    },
+    {
+      "path": "docs/BENCHMARKS.md",
+      "sha256": "3bf5d13e5bedaa772aa5637bb5bf897a18f64f73b3873c5d84b63f45c8d8e534",
+      "bytes": 819
+    },
+    {
+      "path": "docs/BUILD.md",
+      "sha256": "fb2280c3f374e5b5d987cf98bccf74d8ef4d9662b1e843843b9a757724de8725",
+      "bytes": 2249
+    },
+    {
+      "path": "docs/DSH.md",
+      "sha256": "1ffe3e4649acd12d9854e5b7f80fdffd15915f262978f819c54e81db5b2f18cf",
+      "bytes": 1875
+    },
+    {
+      "path": "docs/INSTALL.md",
+      "sha256": "83e4d6afc2b08a6a89d007bff5fa31f198965ad67eb2f8feb235131dc160870e",
+      "bytes": 14358
+    },
+    {
+      "path": "docs/RELEASE-CHECKLIST.md",
+      "sha256": "8034d1994b0d6cec84fdf010ca5dc5db2ea28b88a20276f1be5be31810887ad3",
+      "bytes": 1491
+    },
+    {
+      "path": "docs/SUPPORT.md",
+      "sha256": "f7bae2892345369235d3df6b47d2c15cccedf1ae40ea31503b53c78a7e1585dc",
+      "bytes": 1478
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "949b9b0aada7476006469e58ee4ffb0e0f68c2d9137e90a356757b61a09d37f0",
+      "bytes": 1093
+    },
+    {
+      "path": "licenses/third_party/ggml/LICENSE",
+      "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d",
+      "bytes": 1078
+    },
+    {
+      "path": "licenses/third_party/project-maya/LICENSE",
+      "sha256": "574cffb7c57769a9271043ac0c2b07c5e7e7621cfb81081b901d8981e791d121",
+      "bytes": 1160
+    },
+    {
+      "path": "licenses/third_party/project-maya/NOTICE.md",
+      "sha256": "de9203f9978b44f9058d465870dceefd9f1ecf9b09c8d76cd2217eb83cc94ec2",
+      "bytes": 1023
+    },
+    {
+      "path": "patches/n1x-windows-arm64.patch",
+      "sha256": "621524d21691bcd20f887d6497869da3162db8854e1b05623892ee182eb6a373",
+      "bytes": 129728
+    },
+    {
+      "path": "README.md",
+      "sha256": "af3160544fa49d293e2e6f5d3c25f8a34f6970557b7058f5e958abf09d1aa852",
+      "bytes": 4674
+    },
+    {
+      "path": "sponsorship/alipay.jpg",
+      "sha256": "87a33391ae48661874c9769bfad77d97a560ef2386b90e09058253d99848bf16",
+      "bytes": 137570
+    },
+    {
+      "path": "sponsorship/README.md",
+      "sha256": "5434dcd9067840c4fd29712a9a58a5349b1d1c5c0a0f3ee6a4414674b321064a",
+      "bytes": 7194
+    },
+    {
+      "path": "sponsorship/wechat.png",
+      "sha256": "fd5e05851dcc3180fb8ce3d4dd0d6ddff1005aad93b8ace43a70a5ce3d0df999",
+      "bytes": 179766
+    },
+    {
+      "path": "tools/make_native_manifest.py",
+      "sha256": "d869ffdc831c7e5e640c9c158308f30f192200df1f99c2f3f8ce2b527efa5ab9",
+      "bytes": 1164
+    }
+  ],
+  "privacy_scan": "Known private markers absent; five explicitly authorized image files verified by SHA256; installer reviewed separately.",
+  "authorized_payment_images": {
+    "sponsorship/alipay.jpg": "87a33391ae48661874c9769bfad77d97a560ef2386b90e09058253d99848bf16",
+    "sponsorship/wechat.png": "fd5e05851dcc3180fb8ce3d4dd0d6ddff1005aad93b8ace43a70a5ce3d0df999",
+    "apps/host/public/brand/project-avatar.png": "e3180d4bec36076af79dcb089d257380f164be5cd9945941ec584382ec327faa",
+    "apps/desktop/src-tauri/icons/icon.png": "e3180d4bec36076af79dcb089d257380f164be5cd9945941ec584382ec327faa",
+    "apps/desktop/src-tauri/icons/icon.ico": "242ad453cca303110f8e400eb78f26db6d625631519951351590a72e8eb2e974"
+  },
+  "patch_check": "passed against pinned HEAD",
+  "repository": "https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq"
+}

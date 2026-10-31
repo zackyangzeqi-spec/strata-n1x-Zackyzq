@@ -1,0 +1,3 @@
+# Enable only after confirming a real public funding URL.
+# Do not infer a GitHub account from the author display name.
+# custom: ["https://YOUR-VERIFIED-PUBLIC-SUPPORT-PAGE"]

@@ -1,0 +1,14 @@
+*.gguf
+*.bin
+*.safetensors
+*.log
+*.jsonl
+*.sqlite*
+.env*
+node_modules/
+target/
+build/
+sessions/
+credentials*
+n1x-native-build.json
+*.pdb
