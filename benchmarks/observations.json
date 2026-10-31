@@ -96,7 +96,7 @@
       "expert_ram_cache_gb": null,
       "prompt_tokens": 51824,
       "reused_tokens": 49504,
-      "output_tokens": 1101,
+      "output_tokens": 1108,
       "decode_tokens_s": 16.1,
       "first_engine_token_s": null,
       "duration_s": 90
@@ -204,6 +204,21 @@
       "decode_tokens_s": 7.3,
       "first_engine_token_s": null,
       "duration_s": 17.5
+    }
+  ],
+  "documentation_corrections": [
+    {
+      "date": "2026-10-31",
+      "field": "output_tokens",
+      "match": {
+        "prompt_tokens": 51824,
+        "reused_tokens": 49504,
+        "decode_tokens_s": 16.1
+      },
+      "previous_transcription": 1101,
+      "corrected_transcription": 1108,
+      "source": "https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/blob/8d06553d48e6f01b1f759ef6e459cc607b2c188c/docs/images/n1x-deepseek225-requests.png",
+      "reason": "Manual transcription corrected against the existing screenshot; no new model run; UI aggregate retained as reported."
     }
   ]
 }

@@ -40,13 +40,13 @@
     },
     {
       "path": "benchmarks/observations.csv",
-      "sha256": "5aee5668cdf2219e6e7c831523c79a6eeace4dd6cf593c15c0d733659881e463",
-      "bytes": 1333
+      "sha256": "fe56226abced9e9b6f61e69157c4c792eb8f18cb6264795a4be5c409db5eac33",
+      "bytes": 1317
     },
     {
       "path": "benchmarks/observations.json",
-      "sha256": "06112d38a85a803fcf0baeddae0d70034dff9c86323c749bf470ef406c1df19c",
-      "bytes": 5861
+      "sha256": "f7976f82705ef7769b1d5960fffbf698ff36d85df91b72ae16c720643f15a38d",
+      "bytes": 6467
     },
     {
       "path": "benchmarks/prompts.json",
@@ -65,23 +65,23 @@
     },
     {
       "path": "docs/BENCHMARKS.md",
-      "sha256": "7f826e5f40f6a53b14ee261701d08b895ac47f7cd38471403a2a03d08e28d2af",
-      "bytes": 4668
+      "sha256": "b515fb78c9d22fd84a5c3771db223f007840230ec29391e0d3a32704ab66b95d",
+      "bytes": 5645
     },
     {
       "path": "docs/BUILD.md",
-      "sha256": "fb2280c3f374e5b5d987cf98bccf74d8ef4d9662b1e843843b9a757724de8725",
-      "bytes": 2249
+      "sha256": "3f523f6bbfc6c51b655bb0ebe347bc767b853d4e80a8984bf56a0bbe5bb47cfa",
+      "bytes": 6422
     },
     {
       "path": "docs/DSH.md",
-      "sha256": "0b77ccd95c658d4e89898bb51264531d781bc84d0fcc747eaafb4cc7c127d0a2",
-      "bytes": 2231
+      "sha256": "f299ac23a5127e734235ff217f62d3d07dc052257f5bd1f59ba8657c3a2f0393",
+      "bytes": 6561
     },
     {
       "path": "docs/FAQ.md",
-      "sha256": "f63d395f53bfd137a5c63bf6385d1d65d6f662bf4a968d58472daa15605bb78a",
-      "bytes": 2994
+      "sha256": "4ea4a8d25876b764dbeef1664ef16b9f512725130834b2ecc0be9dd7011e1302",
+      "bytes": 8101
     },
     {
       "path": "docs/images/n1x-deepseek225-monitor.png",
@@ -100,8 +100,8 @@
     },
     {
       "path": "docs/INSTALL.md",
-      "sha256": "83e4d6afc2b08a6a89d007bff5fa31f198965ad67eb2f8feb235131dc160870e",
-      "bytes": 14358
+      "sha256": "2b0ff3b05cb40ab0e8683ee469fdaad0f0236a37f2329a0be581002e4250e8ac",
+      "bytes": 10971
     },
     {
       "path": "docs/RELEASE-CHECKLIST.md",
@@ -140,8 +140,8 @@
     },
     {
       "path": "README.md",
-      "sha256": "43514ba5335ef6f67fb7885214ec3f85706a5c562035a40b120eecb489af203c",
-      "bytes": 6579
+      "sha256": "53e5bd7d09a182270ee5ac757c54d1835ab93791916d5284daa0f41a50a205d3",
+      "bytes": 8620
     },
     {
       "path": "sponsorship/alipay.jpg",
@@ -162,6 +162,21 @@
       "path": "tools/make_native_manifest.py",
       "sha256": "d869ffdc831c7e5e640c9c158308f30f192200df1f99c2f3f8ce2b527efa5ab9",
       "bytes": 1164
+    },
+    {
+      "path": "docs/AI-ASSISTED.md",
+      "sha256": "c402baf41115f38d1ffdbfe3028b4fac265626fb7ee0bfadae829362fe1d0081",
+      "bytes": 12126
+    },
+    {
+      "path": "docs/DEVELOPMENT-NOTES.md",
+      "sha256": "a0b6d0edfdb4405738d928ad1299082760a2b1cc22561c00eaeb8f2240adec50",
+      "bytes": 18235
+    },
+    {
+      "path": "docs/PROJECT-FACTS.md",
+      "sha256": "fc015f1dfa472602b2349a9403f5787a59978bf621a69b90c3c77778502bdf41",
+      "bytes": 5925
     }
   ],
   "privacy_scan": "Known private markers absent from text. Five previously authorized project/payment images plus three explicitly authorized unredacted demonstration screenshots are hash-pinned exceptions. No private runtime profiles, credentials or model weights included.",
@@ -178,5 +193,16 @@
     "docs/images/n1x-deepseek225-monitor.png": "9384a78aa93d0257e4bd4ae55da6133179b7c470bc3803652e9a6b19fe790f89",
     "docs/images/n1x-deepseek225-requests.png": "dd922713a74eeca8ad68cf7f1e5356fbe84959b9b5040a7172cb93b760cc9c24",
     "docs/images/n1x-nvidia-strata-dsh.png": "d8989364d9b40f67367a7a3b33f111e772f8c5e14a5655526abe429212d8d1e7"
+  },
+  "documentation_update": {
+    "date": "2026-10-31",
+    "source_repository_commit": "8d06553d48e6f01b1f759ef6e459cc607b2c188c",
+    "scope": "Documentation, historical observation transcription correction, and public file inventory only.",
+    "runtime_and_release_assets_changed": false,
+    "new_model_runs": false,
+    "correction": "The existing screenshot row with prompt_tokens=51824 and decode_tokens_s=16.1 shows 1108 output tokens, previously transcribed as 1101.",
+    "inventory_basis": "Final staged Git index bytes; PACKAGE.json excluded from its own file list.",
+    "historical_checks_note": "Existing patch_check, runtime-check and image-authorization statements retain their baseline scope; this update adds static documentation checks only.",
+    "local_development_summary": "Sanitized existing T-048 records: native desktop route, RAM-cache comparison, loopback HTTP transport, same-machine reinstall and historical download lock metadata; no new runs."
   }
 }

@@ -1,12 +1,14 @@
 # Measured performance / 实测表现 — 2026-10-31
 
-**Selected native desktop decode examples: 9.3–20.0 tokens/s across different quantizations and cache conditions.** This is not the complete min/max range, a sustained-speed promise or a controlled cross-engine ranking. Slower results remain below.
+**主要记录：2.25bpw 桌面 UI 汇总 13 次请求，平均输出 13.3 tokens/s。** 以下保留维护者已有截图、历史记录和较慢对照；不同量化与缓存场景分开理解。本页没有新增模型测试，也不承诺持续速度或跨引擎排名。
+
+**Primary observation:** the 2.25bpw desktop UI reports an average output speed of 13.3 tokens/s across 13 requests. Historical samples and slower comparisons are retained with their conditions; they are not a standardized benchmark or guaranteed range.
 
 ## Current 2.25bpw usage / 当前版本实际使用
 
 The maintainer supplied the following desktop screenshots. The header identifies DeepSeek V4.1 Flash IST-DAS-2.25bpw; the monitor reports 64GiB GPU and approximately 62GiB visible system RAM. The UI summary reports **13 requests, 13.3 tokens/s average output speed, 124 tokens/s prompt-reading speed and about 310K reused prompt tokens**. This is a UI-reported session aggregate, not an independently rerun benchmark.
 
-可见单次最高 **16.1 token/s**，输出 **1,101 tokens**，提示词 **51,824**、复用 **49,504**，整轮约 **90秒**。最后一轮 **12.0 token/s**、输出 **1,945 tokens**，输入 **16,229**、未复用，整轮约 **287秒**。截图可见的单次范围为 **7.3–16.1 token/s**；它不是全部场景的速度保证。
+可见单次最高 **16.1 token/s**，输出 **1,108 tokens**，提示词 **51,824**、复用 **49,504**，整轮约 **90秒**。最后一轮 **12.0 token/s**、输出 **1,945 tokens**，输入 **16,229**、未复用，整轮约 **287秒**。截图可见的单次范围为 **7.3–16.1 token/s**；它不是全部场景的速度保证。
 
 ![2.25bpw monitoring](images/n1x-deepseek225-monitor.png)
 ![2.25bpw recent requests and cache summary](images/n1x-deepseek225-requests.png)
@@ -39,3 +41,9 @@ For the 2.25 RAM-cache comparison, each request had 11,548 prompt tokens and zer
 - [Public prompts](../benchmarks/prompts.json) and [reproduction protocol](../benchmarks/README.md) are a **new reusable suite**. They were not the source of the historical results above. No new model run is claimed in this documentation update.
 
 The screenshot-derived rows are manual transcriptions of displayed rounded values. Historical rows are allowlisted extracts from saved measurements. Both have explicit provenance labels. Future independent measurements should record model quantization, engine build, memory split, SSD placement, cache state, prompt/reused/output counts, first-token timing and full duration.
+
+## 文档勘误 / Transcription correction
+
+2026-10-31 对既有请求截图进行文字核对：16.1 tokens/s、提示词 51,824、复用 49,504 的这一行，输出数是 **1,108**。之前文档、CSV、JSON 将它转录为 1,101，现同步更正。截图未更改，没有新增请求；其余该行数值保持原样。UI 的 13 次请求汇总与 13.3 tokens/s 保留原报告口径，没有用 12 条可见行重新计算。
+
+来源：[固定提交中的原截图](https://github.com/zackyangzeqi-spec/strata-n1x-Zackyzq/blob/8d06553d48e6f01b1f759ef6e459cc607b2c188c/docs/images/n1x-deepseek225-requests.png)。DSH 的两轮历史记录与当时超时扩展条件另见 [DSH](DSH.md)。
